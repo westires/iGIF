@@ -71,10 +71,7 @@ public final class IGIFPlugin extends JavaPlugin {
         }
 
         
-        log.info("ItemsAdder integration: " + (itemsAdder.isAvailable() ? "ENABLED" : "DISABLED"));
-        log.info("Skript integration: "     + (skript.isEnabled()       ? "ENABLED" : "DISABLED"));
-        log.info("Loaded animations: "      + animationLoader.getAll().size());
-        log.info("iGIF is ready.");
+        log.startupSummary(itemsAdder.isAvailable(), skript.isEnabled(), animationLoader.getAll().size());
     }
 
     @Override
