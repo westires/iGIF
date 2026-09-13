@@ -20,6 +20,10 @@ resourcepack:
   port: 8765
   host: ""
 
+web:
+  enabled: true
+  port: 8766
+
 itemsadder:
   namespace: igif
   auto-reload: true

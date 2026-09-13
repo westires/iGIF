@@ -1,6 +1,7 @@
 // Plugin giriş noktası. v2 — standalone resourcepack, GUI, download desteği.
 package com.westires.igif;
 
+import com.westires.igif.web.AdminWebServer;
 import com.westires.igif.animation.AnimationLoader;
 import com.westires.igif.api.iGIFAPI;
 import com.westires.igif.api.iGIFAPIImpl;
@@ -32,6 +33,7 @@ public final class IGIFPlugin extends JavaPlugin {
     private UnicodeAllocator unicodeAllocator;
     private GifDownloader downloader;
     private AnimationMenuGui menuGui;
+    private AdminWebServer webServer;
 
     @Override
     public void onEnable() {
@@ -70,6 +72,10 @@ public final class IGIFPlugin extends JavaPlugin {
         skript.injectApi();
         skript.register();
 
+        // Web admin panel
+        webServer = new AdminWebServer(this, log, animationLoader, processor);
+        webServer.start();
+
         // Download helper
         downloader = new GifDownloader(this, log, animationLoader, processor);
 
@@ -89,6 +95,7 @@ public final class IGIFPlugin extends JavaPlugin {
     public void onDisable() {
         if (playbackManager != null) playbackManager.stopAllEverywhere();
         if (packManager != null) packManager.stop();
+        if (webServer != null) webServer.stop();
         getServer().getServicesManager().unregisterAll(this);
         log.info("iGIF disabled.");
     }

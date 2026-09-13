@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>iGIF Admin Panel</title>
+<style>
+  :root {
+    --bg:       #0f0f13;
+    --surface:  #1a1a24;
+    --card:     #22222f;
+    --border:   #2e2e3e;
+    --accent:   #55ff55;
+    --accent2:  #00ccff;
+    --text:     #e8e8f0;
+    --muted:    #7878a0;
+    --danger:   #ff4455;
+    --warn:     #ffaa22;
+    --radius:   12px;
+    --shadow:   0 4px 24px #00000080;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+  .logo {
+    font-size: 1.6rem; font-weight: 800;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+  .logo-sub { color: var(--muted); font-size: .85rem; margin-left: 2px; }
+  header .spacer { flex: 1; }
+  .badge {
+    background: #1e3a1e; color: var(--accent);
+    border: 1px solid #2a5a2a;
+    border-radius: 20px; padding: 4px 12px; font-size: .8rem; font-weight: 600;
+  }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 380px 1fr; gap: 0; height: calc(100vh - 64px); }
+  .sidebar {
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .main { overflow-y: auto; padding: 28px; }
+
+  /* ── Upload zone ── */
+  .upload-zone {
+    margin: 20px; border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 28px 16px; text-align: center; cursor: pointer;
+    transition: all .2s; position: relative;
+  }
+  .upload-zone.drag { border-color: var(--accent); background: #55ff5510; }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-zone .icon { font-size: 2.4rem; margin-bottom: 8px; }
+  .upload-zone h3 { font-size: 1rem; color: var(--text); margin-bottom: 4px; }
+  .upload-zone p  { font-size: .8rem; color: var(--muted); }
+
+  /* ── Upload form ── */
+  .upload-form { margin: 0 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .field label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  .field input, .field select {
+    width: 100%; background: var(--card); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 9px 12px; font-size: .9rem;
+    outline: none; transition: border .15s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+
+  /* Slider */
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type=range] {
+    flex: 1; -webkit-appearance: none; height: 4px;
+    background: var(--border); border-radius: 4px; outline: none; cursor: pointer;
+  }
+  .slider-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; box-shadow: 0 0 6px var(--accent);
+  }
+  .fps-val {
+    min-width: 42px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 8px; text-align: center;
+    font-size: .85rem; font-weight: 700; color: var(--accent);
+  }
+
+  /* Preview */
+  .preview-area {
+    margin: 0 20px 16px; border-radius: 10px; overflow: hidden;
+    background: var(--card); border: 1px solid var(--border);
+    min-height: 80px; display: flex; align-items: center; justify-content: center;
+  }
+  .preview-area img { max-width: 100%; max-height: 180px; object-fit: contain; border-radius: 8px; }
+  .preview-area .no-preview { color: var(--muted); font-size: .85rem; }
+
+  /* Buttons */
+  .btn {
+    padding: 10px 18px; border: none; border-radius: 8px; cursor: pointer;
+    font-size: .9rem; font-weight: 700; transition: all .15s; display: inline-flex;
+    align-items: center; gap: 7px;
+  }
+  .btn-primary { background: var(--accent); color: #0a1a0a; }
+  .btn-primary:hover { background: #77ff77; transform: translateY(-1px); }
+  .btn-primary:disabled { background: #2a4a2a; color: var(--muted); cursor: not-allowed; transform: none; }
+  .btn-danger  { background: var(--danger); color: #fff; }
+  .btn-danger:hover  { background: #ff6677; }
+  .btn-ghost   { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover   { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 6px 12px; font-size: .8rem; }
+
+  /* ── Animation list ── */
+  .list-header {
+    padding: 14px 20px 10px;
+    font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .8px;
+    border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
+  }
+  .anim-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+  .anim-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    margin: 6px; padding: 12px 14px; cursor: pointer;
+    transition: border .15s, transform .1s;
+  }
+  .anim-card:hover { border-color: var(--accent2); transform: translateX(2px); }
+  .anim-card.active { border-color: var(--accent); background: #55ff5508; }
+  .anim-name { font-size: .95rem; font-weight: 700; color: var(--text); }
+  .anim-meta { font-size: .75rem; color: var(--muted); margin-top: 3px; }
+  .anim-pill {
+    display: inline-block; font-size: .68rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px; margin-top: 5px;
+  }
+  .pill-ok      { background: #1a3a1a; color: var(--accent);  border: 1px solid #2a5a2a; }
+  .pill-pending { background: #3a3a1a; color: var(--warn);    border: 1px solid #5a5a1a; }
+  .pill-processing { background: #1a2a3a; color: var(--accent2); border: 1px solid #2a4a5a; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+  /* ── Detail panel ── */
+  .detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 12px; color: var(--muted); }
+  .detail-empty .icon { font-size: 3rem; }
+
+  .detail-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 20px;
+  }
+  .detail-title { font-size: 1.5rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+  .detail-subtitle { font-size: .85rem; color: var(--muted); }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin: 20px 0; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; text-align: center;
+  }
+  .stat-val { font-size: 1.4rem; font-weight: 800; color: var(--accent2); }
+  .stat-label { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* Progress bar */
+  .progress-bar-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 18px; display: none;
+  }
+  .progress-bar-wrap.visible { display: block; }
+  .progress-label { font-size: .82rem; color: var(--muted); margin-bottom: 8px; }
+  .progress-bar-bg { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; transition: width .3s; }
+
+  /* Toast */
+  #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px; font-size: .88rem;
+    box-shadow: var(--shadow); animation: slideIn .2s ease; min-width: 240px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .toast.ok     { border-left: 3px solid var(--accent);  }
+  .toast.err    { border-left: 3px solid var(--danger);  }
+  .toast.info   { border-left: 3px solid var(--accent2); }
+  @keyframes slideIn { from{transform:translateX(60px);opacity:0} to{transform:none;opacity:1} }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media(max-width:900px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .sidebar { height: auto; max-height: 55vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">iGIF <span class="logo-sub">Admin</span></div>
+  </div>
+  <div class="spacer"></div>
+  <span class="badge" id="status-badge">● Connecting…</span>
+</header>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+
+    <!-- Drop zone -->
+    <div class="upload-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".gif,image/gif"/>
+      <div class="icon">🎞️</div>
+      <h3>Drop a GIF here</h3>
+      <p>or click to select a file</p>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-area" id="preview-area">
+      <span class="no-preview">No GIF selected</span>
+    </div>
+
+    <!-- Upload form -->
+    <div class="upload-form" id="upload-form" style="display:none">
+      <div class="field">
+        <label>Animation Name</label>
+        <input type="text" id="anim-name" placeholder="welcome, intro, firework…"/>
+      </div>
+      <div class="field">
+        <label>FPS — <span id="fps-display">10</span> fps</label>
+        <div class="slider-row">
+          <input type="range" id="fps-slider" min="1" max="30" value="10" oninput="updateFps(this.value)"/>
+          <span class="fps-val" id="fps-val">10</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Display Type</label>
+        <select id="display-type">
+          <option value="TITLE">Title</option>
+          <option value="SUBTITLE">Subtitle</option>
+          <option value="ACTIONBAR">ActionBar</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Size (px)</label>
+        <div class="slider-row">
+          <input type="range" id="size-slider" min="16" max="256" value="64" step="8" oninput="updateSize(this.value)"/>
+          <span class="fps-val" id="size-val">64</span>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="upload-btn" onclick="uploadGif()">
+        <span>⬆</span> Upload & Process
+      </button>
+    </div>
+
+    <!-- Anim list -->
+    <div class="list-header">
+      <span id="list-count">Animations</span>
+      <button class="btn btn-ghost btn-sm" onclick="refreshList()">↻ Refresh</button>
+    </div>
+    <div class="anim-list" id="anim-list">
+      <div style="padding:20px;text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main" id="main">
+    <div class="detail-empty">
+      <div class="icon">🎬</div>
+      <div style="font-size:1.1rem;font-weight:600;color:var(--text)">Select an animation</div>
+      <div>or upload a new GIF to get started</div>
+    </div>
+  </main>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const API = '';
+let selectedId = null;
+let pollTimer = null;
+let selectedFile = null;
+
+// ── Drop zone ──────────────────────────────────────────────────────────────
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'image/gif') handleFileSelect(f);
+  else toast('Please drop a .gif file', 'err');
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFileSelect(e.target.files[0]);
+});
+
+function handleFileSelect(file) {
+  selectedFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const area = document.getElementById('preview-area');
+    area.innerHTML = '<img src="' + ev.target.result + '" alt="preview"/>';
+  };
+  reader.readAsDataURL(file);
+
+  // Auto-fill name from filename
+  const nameInput = document.getElementById('anim-name');
+  if (!nameInput.value) {
+    nameInput.value = file.name.replace('.gif', '').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  }
+  document.getElementById('upload-form').style.display = 'flex';
+}
+
+function updateFps(v) {
+  document.getElementById('fps-val').textContent = v;
+  document.getElementById('fps-display').textContent = v;
+}
+function updateSize(v) {
+  document.getElementById('size-val').textContent = v;
+}
+
+// ── Upload ─────────────────────────────────────────────────────────────────
+
+async function uploadGif() {
+  if (!selectedFile) { toast('No GIF selected', 'err'); return; }
+  const name = document.getElementById('anim-name').value.trim();
+  if (!name) { toast('Enter an animation name', 'err'); return; }
+
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true; btn.textContent = '⏳ Uploading…';
+
+  const fd = new FormData();
+  fd.append('gif', selectedFile, selectedFile.name);
+  fd.append('name', name);
+  fd.append('fps', document.getElementById('fps-slider').value);
+  fd.append('type', document.getElementById('display-type').value);
+  fd.append('size', document.getElementById('size-slider').value);
+
+  try {
+    const r = await fetch(API + '/api/upload', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    toast('✔ Uploaded — processing ' + name + '…', 'ok');
+    document.getElementById('upload-form').style.display = 'none';
+    document.getElementById('preview-area').innerHTML = '<span class="no-preview">No GIF selected</span>';
+    document.getElementById('anim-name').value = '';
+    selectedFile = null;
+    await refreshList();
+    selectAnim(name);
+  } catch(e) {
+    toast('Upload failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<span>⬆</span> Upload & Process';
+  }
+}
+
+// ── List ───────────────────────────────────────────────────────────────────
+
+async function refreshList() {
+  try {
+    const r = await fetch(API + '/api/list');
+    const anims = await r.json();
+    renderList(anims);
+    document.getElementById('status-badge').textContent = '● Online';
+    document.getElementById('status-badge').style.color = 'var(--accent)';
+    document.getElementById('list-count').textContent = 'Animations (' + anims.length + ')';
+  } catch(e) {
+    document.getElementById('status-badge').textContent = '● Offline';
+    document.getElementById('status-badge').style.color = 'var(--danger)';
+  }
+}
+
+function renderList(anims) {
+  const el = document.getElementById('anim-list');
+  if (!anims.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:.85rem">No animations yet</div>'; return; }
+  el.innerHTML = anims.map(a => `
+    <div class="anim-card ${a.id === selectedId ? 'active' : ''}" onclick="selectAnim('${a.id}')">
+      <div class="anim-name">${a.id}</div>
+      <div class="anim-meta">${a.fps} fps · ${a.type} · ${a.size}px</div>
+      <span class="anim-pill ${a.processing ? 'pill-processing' : a.generated ? 'pill-ok' : 'pill-pending'}">
+        ${a.processing ? '⏳ Processing' : a.generated ? '✔ Ready (' + a.frames + ' frames)' : '○ Not generated'}
+      </span>
+    </div>
+  `).join('');
+}
+
+// ── Detail ─────────────────────────────────────────────────────────────────
+
+async function selectAnim(id) {
+  selectedId = id;
+  clearInterval(pollTimer);
+
+  const r = await fetch(API + '/api/status/' + id);
+  const a = await r.json();
+  if (a.error) { toast('Animation not found', 'err'); return; }
+
+  renderDetail(a);
+
+  if (a.processing) {
+    pollTimer = setInterval(async () => {
+      const rp = await fetch(API + '/api/status/' + id);
+      const ap = await rp.json();
+      renderDetail(ap);
+      if (!ap.processing) { clearInterval(pollTimer); refreshList(); toast('✔ ' + id + ' is ready!', 'ok'); }
+    }, 1500);
+  }
+
+  await refreshList();
+}
+
+function renderDetail(a) {
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="detail-card">
+      <div class="detail-title">${a.id}</div>
+      <div class="detail-subtitle">${a.processing ? '⏳ Processing…' : a.generated ? '✔ Ready to play' : '○ Not generated yet'}</div>
+
+      <div class="stats-grid">
+        <div class="stat"><div class="stat-val">${a.frames}</div><div class="stat-label">Frames</div></div>
+        <div class="stat"><div class="stat-val">${a.fps || '—'}</div><div class="stat-label">FPS</div></div>
+        <div class="stat"><div class="stat-val">${a.type || '—'}</div><div class="stat-label">Display</div></div>
+        <div class="stat"><div class="stat-val">${a.size || '—'}px</div><div class="stat-label">Size</div></div>
+      </div>
+
+      <div class="progress-bar-wrap ${a.processing ? 'visible' : ''}" id="progress-bar">
+        <div class="progress-label">Processing frames…</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="pbar-fill" style="width:${a.processing ? '60%' : '100%'}"></div></div>
+      </div>
+
+      <div class="actions" style="margin-top:18px">
+        <button class="btn btn-primary" onclick="regenerate('${a.id}')" ${a.processing ? 'disabled' : ''}>↻ Regenerate</button>
+        <button class="btn btn-ghost"   onclick="copyCmd('/igif play ${a.id} <player>')">📋 Copy Play Cmd</button>
+        <button class="btn btn-danger"  onclick="deleteAnim('${a.id}')">🗑 Delete</button>
+      </div>
+    </div>
+
+    <div class="detail-card" style="font-size:.88rem;color:var(--muted)">
+      <div style="font-weight:700;color:var(--text);margin-bottom:10px">In-game commands</div>
+      <code style="display:block;background:var(--surface);border-radius:6px;padding:8px 12px;margin:4px 0;font-size:.82rem">/igif play ${a.id} &lt;player&gt;</code>
+      <code style="display:block;background:var(--surface);border-radius:6px;padding:8px 12px;margin:4px 0;font-size:.82rem">/igif stop ${a.id} &lt;player&gt;</code>
+      <code style="display:block;background:var(--surface);border-radius:6px;padding:8px 12px;margin:4px 0;font-size:.82rem">/igif config ${a.id} fps &lt;value&gt;</code>
+    </div>
+  `;
+}
+
+async function regenerate(id) {
+  const r = await fetch(API + '/api/generate/' + id, { method: 'POST' });
+  const d = await r.json();
+  if (d.error) { toast(d.error, 'err'); return; }
+  toast('↻ Regenerating ' + id + '…', 'info');
+  selectAnim(id);
+}
+
+async function deleteAnim(id) {
+  if (!confirm('Delete animation "' + id + '"? This cannot be undone.')) return;
+  const r = await fetch(API + '/api/delete/' + id, { method: 'POST' });
+  const d = await r.json();
+  if (d.error) { toast(d.error, 'err'); return; }
+  toast('🗑 Deleted ' + id, 'ok');
+  selectedId = null;
+  document.getElementById('main').innerHTML = '<div class="detail-empty"><div class="icon">🎬</div><div>Select an animation</div></div>';
+  refreshList();
+}
+
+function copyCmd(cmd) {
+  navigator.clipboard.writeText(cmd).then(() => toast('Copied!', 'ok'));
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+refreshList();
+setInterval(refreshList, 5000);
+</script>
+</body>
+</html>

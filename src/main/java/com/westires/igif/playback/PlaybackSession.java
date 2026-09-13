@@ -6,6 +6,7 @@ import com.westires.igif.animation.AnimationConfig;
 import com.westires.igif.animation.DisplayType;
 import com.westires.igif.gif.FrameEntry;
 import com.westires.igif.integration.ItemsAdderIntegration;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.title.Title;
@@ -75,6 +76,8 @@ public final class PlaybackSession {
         }
     }
 
+    private static final Key IGIF_FONT = Key.key("igif", "igif_anim");
+
     private void renderFrame(FrameEntry entry) {
         // Prefer standalone unicode character; fall back to ItemsAdder wrapper
         String character = entry.character();
@@ -83,7 +86,7 @@ public final class PlaybackSession {
         }
 
         Component frameComp = (character != null && !character.isEmpty())
-                ? Component.text(character)
+                ? Component.text(character).font(IGIF_FONT)
                 : Component.text("[" + entry.id() + "]");
 
         AnimationConfig cfg = animation.getConfig();
