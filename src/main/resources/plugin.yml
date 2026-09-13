@@ -2,14 +2,12 @@ name: iGIF
 version: '${project.version}'
 main: com.westires.igif.IGIFPlugin
 api-version: '1.21'
-description: Animated GIF to Minecraft Title/Subtitle/ActionBar via ItemsAdder
+description: Animated GIF to Minecraft Title/Subtitle/ActionBar — Standalone
 author: Westires
 website: https://github.com/Westires/iGIF
 
-depend:
-  - ItemsAdder
-
 softdepend:
+  - ItemsAdder
   - Skript
 
 commands:
@@ -37,6 +35,9 @@ permissions:
       igif.list: true
       igif.info: true
       igif.config: true
+      igif.delete: true
+      igif.menu: true
+      igif.download: true
 
   igif.create:
     description: Create animation configs
@@ -71,5 +72,13 @@ permissions:
     default: op
 
   igif.delete:
-    description: Delete an animation and its ItemsAdder assets
+    description: Delete an animation and its assets
+    default: op
+
+  igif.menu:
+    description: Open the animation manager GUI
+    default: op
+
+  igif.download:
+    description: Download GIFs from URL
     default: op

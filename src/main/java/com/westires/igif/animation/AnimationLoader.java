@@ -76,8 +76,13 @@ public final class AnimationLoader {
         if (genDir.exists()) {
             List<String> frameIds = scanGeneratedFrames(id, genDir);
             if (!frameIds.isEmpty()) {
-                animation.setFrameIds(frameIds);
-                log.debug("Restored " + frameIds.size() + " cached frames for '" + id + "'.");
+                // Restore as FrameEntry list with default ticks; unicode chars loaded from allocator at runtime
+                List<com.westires.igif.gif.FrameEntry> entries = frameIds.stream()
+                        .map(fid -> new com.westires.igif.gif.FrameEntry(fid,
+                                Math.max(1, 20 / config.fps()), ""))
+                        .toList();
+                animation.setFrames(entries);
+                log.debug("Restored " + entries.size() + " cached frames for '" + id + "'.");
             }
         }
 

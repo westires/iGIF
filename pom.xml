@@ -6,7 +6,7 @@
 
     <groupId>com.westires</groupId>
     <artifactId>igif</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0-beta</version>
     <packaging>jar</packaging>
 
     <name>iGIF</name>

@@ -1,10 +1,14 @@
-// GIF → PNG kareler → ItemsAdder asset pipeline'ını yönetir.
+// GIF → PNG kareler → ResourcePack + isteğe bağlı ItemsAdder pipeline.
+// Frame skip ve piksel benzerliği deduplikasyonu destekler.
 package com.westires.igif.gif;
 
 import com.westires.igif.animation.Animation;
 import com.westires.igif.animation.AnimationConfig;
 import com.westires.igif.animation.AnimationLoader;
 import com.westires.igif.integration.ItemsAdderIntegration;
+import com.westires.igif.resourcepack.ResourcePackManager;
+import com.westires.igif.resourcepack.ResourcePackManager.FontEntry;
+import com.westires.igif.resourcepack.UnicodeAllocator;
 import com.westires.igif.util.ConsoleLogger;
 import org.bukkit.plugin.Plugin;
 
@@ -13,13 +17,10 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
+import java.nio.file.*;
+import java.util.*;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
 
 public final class AnimationProcessor {
 
@@ -27,39 +28,40 @@ public final class AnimationProcessor {
     private final ConsoleLogger log;
     private final AnimationLoader loader;
     private final ItemsAdderIntegration itemsAdder;
+    private final ResourcePackManager packManager;
+    private final UnicodeAllocator allocator;
 
     private final Set<String> processing = ConcurrentHashMap.newKeySet();
 
     public AnimationProcessor(Plugin plugin, ConsoleLogger log, AnimationLoader loader,
-                               ItemsAdderIntegration itemsAdder) {
-        this.plugin = plugin;
-        this.log = log;
-        this.loader = loader;
+                               ItemsAdderIntegration itemsAdder,
+                               ResourcePackManager packManager,
+                               UnicodeAllocator allocator) {
+        this.plugin     = plugin;
+        this.log        = log;
+        this.loader     = loader;
         this.itemsAdder = itemsAdder;
+        this.packManager = packManager;
+        this.allocator  = allocator;
     }
 
     public boolean isProcessing(String id) { return processing.contains(id); }
 
     public CompletableFuture<Animation> process(Animation animation) {
         String id = animation.getId();
-        if (processing.contains(id)) {
-            return CompletableFuture.failedFuture(
-                    new IllegalStateException("Animation '" + id + "' is already being processed."));
-        }
+        if (processing.contains(id)) return CompletableFuture.failedFuture(
+                new IllegalStateException("Animation '" + id + "' is already being processed."));
         processing.add(id);
         long startMs = System.currentTimeMillis();
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                return doProcess(animation, startMs);
-            } finally {
-                processing.remove(id);
-            }
+            try { return doProcess(animation, startMs); }
+            finally { processing.remove(id); }
         });
     }
 
     private Animation doProcess(Animation animation, long startMs) {
         String id = animation.getId();
-        AnimationConfig config = animation.getConfig();
+        AnimationConfig cfg = animation.getConfig();
 
         log.progress(id, "Loading GIF file...");
         File gifFile = animation.getGifFile();
@@ -70,150 +72,223 @@ public final class AnimationProcessor {
         int maxFrames  = plugin.getConfig().getInt("limits.max-frames", 500);
 
         log.progress(id, "Reading GIF metadata...");
-        List<GifFrame> frames;
-        try {
-            frames = GifFrameExtractor.extract(gifFile);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to read GIF: " + e.getMessage(), e);
+        List<GifFrame> rawFrames;
+        try { rawFrames = GifFrameExtractor.extract(gifFile); }
+        catch (IOException e) { throw new RuntimeException("Failed to read GIF: " + e.getMessage(), e); }
+
+        if (rawFrames.isEmpty()) throw new RuntimeException("GIF contains no usable frames.");
+
+        // --- Frame skip ---
+        int skip = Math.max(1, cfg.frameSkip());
+        List<GifFrame> frames = new ArrayList<>();
+        for (int i = 0; i < rawFrames.size(); i++) {
+            if (i % skip == 0) {
+                // Accumulate delay of skipped frames into the kept frame
+                int accDelay = 0;
+                for (int j = i; j < Math.min(i + skip, rawFrames.size()); j++) {
+                    accDelay += rawFrames.get(j).delayMs();
+                }
+                frames.add(new GifFrame(rawFrames.get(i).index(), rawFrames.get(i).image(), accDelay));
+            }
         }
 
-        if (frames.isEmpty()) throw new RuntimeException("GIF contains no usable frames.");
         if (frames.size() > maxFrames) {
-            log.warn("Animation '" + id + "' has " + frames.size() + " frames, capped at " + maxFrames + ".");
+            log.warn("'" + id + "' capped at " + maxFrames + " frames.");
             frames = frames.subList(0, maxFrames);
         }
 
-        BufferedImage first = frames.get(0).image();
-        int srcW = first.getWidth();
-        int srcH = first.getHeight();
+        // --- Target size ---
+        int hardMaxW = Math.min(cfg.maxWidth(), globalMaxW);
+        int hardMaxH = Math.min(cfg.maxHeight(), globalMaxH);
+        int[] target = computeTargetSize(frames.get(0).image().getWidth(),
+                frames.get(0).image().getHeight(), cfg.size(), hardMaxW, hardMaxH, cfg.keepAspect());
+        int targetW = target[0], targetH = target[1];
 
-        // Compute target dimensions respecting aspect ratio and size config
-        int hardMaxW = Math.min(config.maxWidth(),  globalMaxW);
-        int hardMaxH = Math.min(config.maxHeight(), globalMaxH);
-        int[] target = computeTargetSize(srcW, srcH, config.size(), hardMaxW, hardMaxH, config.keepAspect());
-        int targetW = target[0];
-        int targetH = target[1];
+        log.progress(id, "Target: " + targetW + "x" + targetH
+                + (cfg.keepAspect() ? " (aspect locked)" : "")
+                + (skip > 1 ? ", skip=" + skip : "")
+                + (cfg.dedup() ? ", dedup on" : ""));
 
-        log.progress(id, "Source: " + srcW + "x" + srcH + " → target: " + targetW + "x" + targetH
-                + (config.keepAspect() ? " (aspect locked)" : " (free)"));
+        // --- Scale all frames ---
+        List<BufferedImage> scaled = new ArrayList<>(frames.size());
+        for (GifFrame f : frames) {
+            scaled.add(scaleFrame(f.image(), targetW, targetH, cfg.keepAspect()));
+        }
 
+        // --- Deduplication ---
+        // FrameGroup: image + accumulated ticks
+        record FrameGroup(BufferedImage img, int totalDelayMs) {}
+        List<FrameGroup> groups = new ArrayList<>();
+
+        if (cfg.dedup()) {
+            int i = 0;
+            while (i < scaled.size()) {
+                BufferedImage base = scaled.get(i);
+                int delay = frames.get(i).delayMs();
+                int j = i + 1;
+                while (j < scaled.size() && similarity(base, scaled.get(j)) >= cfg.dedupThreshold()) {
+                    delay += frames.get(j).delayMs();
+                    j++;
+                }
+                groups.add(new FrameGroup(base, delay));
+                i = j;
+            }
+            if (groups.size() < scaled.size()) {
+                log.progress(id, "Dedup: " + scaled.size() + " → " + groups.size() + " unique frames");
+            }
+        } else {
+            for (int i = 0; i < scaled.size(); i++) {
+                groups.add(new FrameGroup(scaled.get(i), frames.get(i).delayMs()));
+            }
+        }
+
+        // --- Write PNGs to tmp dir ---
         File genDir = animation.getGeneratedDir();
         File tmpDir = new File(genDir.getParentFile(), id + "_tmp_" + System.currentTimeMillis());
         tmpDir.mkdirs();
 
-        log.progress(id, "Extracting frames... 0/" + frames.size());
-        List<String> frameIds = new ArrayList<>(frames.size());
+        // Free old unicode slots
+        allocator.free("igif:" + id + "_");
 
-        for (int i = 0; i < frames.size(); i++) {
-            BufferedImage img = frames.get(i).image();
+        Map<String, FontEntry> fontEntries = new LinkedHashMap<>();
+        List<FrameEntry> frameEntries = new ArrayList<>(groups.size());
+        int baseTicksPerFrame = Math.max(1, 20 / cfg.fps());
 
-            if (img.getWidth() != targetW || img.getHeight() != targetH) {
-                img = scale(img, srcW, srcH, targetW, targetH, config.keepAspect());
-            }
+        log.progress(id, "Writing frames... 0/" + groups.size());
+        for (int i = 0; i < groups.size(); i++) {
+            FrameGroup g = groups.get(i);
+            String frameId   = "igif:" + id + "_frame_" + String.format("%04d", i + 1);
+            String fileName  = String.format("frame_%04d.png", i + 1);
+            char   unicode   = allocator.allocate(frameId);
 
-            String fileName = String.format("frame_%04d.png", i + 1);
-            try {
-                ImageIO.write(img, "PNG", new File(tmpDir, fileName));
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to write " + fileName + ": " + e.getMessage(), e);
-            }
+            // ticks = max(1, delayMs / 50)
+            int ticks = Math.max(1, g.totalDelayMs() / 50);
 
-            frameIds.add("igif:" + id + "_frame_" + String.format("%04d", i + 1));
+            try { ImageIO.write(g.img(), "PNG", new File(tmpDir, fileName)); }
+            catch (IOException e) { throw new RuntimeException("Failed to write " + fileName, e); }
 
-            if ((i + 1) % 10 == 0 || i + 1 == frames.size()) {
-                log.progress(id, "Extracting frames... " + (i + 1) + "/" + frames.size());
+            // Stage for standalone resourcepack
+            try { packManager.stageTexture(id, fileName, g.img()); }
+            catch (IOException e) { log.warn("Failed to stage texture " + fileName + ": " + e.getMessage()); }
+
+            String texPath = "font/" + id + "/" + fileName;
+            int ascent = Math.min(targetH, targetH); // ascent <= height
+            fontEntries.put(frameId, new FontEntry(texPath, targetH, ascent, unicode));
+            frameEntries.add(new FrameEntry(frameId, ticks, String.valueOf(unicode)));
+
+            if ((i + 1) % 10 == 0 || i + 1 == groups.size()) {
+                log.progress(id, "Writing frames... " + (i + 1) + "/" + groups.size());
             }
         }
 
-        log.progress(id, "Generating ItemsAdder assets...");
+        // --- Rebuild standalone resourcepack ---
+        log.progress(id, "Building resource pack...");
         try {
-            itemsAdder.generateAssets(id, tmpDir, frameIds, targetW, targetH);
-        } catch (Exception e) {
-            deleteDirectory(tmpDir);
-            throw new RuntimeException("ItemsAdder asset generation failed: " + e.getMessage(), e);
+            Map<String, FontEntry> allEntries = collectAllFontEntries(id, fontEntries);
+            packManager.rebuild(allEntries);
+        } catch (IOException e) {
+            log.warn("Resource pack rebuild failed: " + e.getMessage());
         }
 
+        // --- Optional ItemsAdder integration ---
+        if (itemsAdder.isAvailable()) {
+            log.progress(id, "Generating ItemsAdder assets...");
+            try {
+                List<String> frameIds = new ArrayList<>();
+                frameEntries.forEach(fe -> frameIds.add(fe.id()));
+                itemsAdder.generateAssets(id, tmpDir, frameIds, targetW, targetH);
+            } catch (Exception e) {
+                log.warn("ItemsAdder asset generation failed (non-fatal): " + e.getMessage());
+            }
+        }
+
+        // --- Atomic move ---
         if (plugin.getConfig().getBoolean("processing.cleanup-old-frames", true) && genDir.exists()) {
             deleteDirectory(genDir);
         }
-
-        try {
-            Files.move(tmpDir.toPath(), genDir.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to move generated frames: " + e.getMessage(), e);
-        }
+        try { Files.move(tmpDir.toPath(), genDir.toPath(), StandardCopyOption.REPLACE_EXISTING); }
+        catch (IOException e) { throw new RuntimeException("Failed to move frames: " + e.getMessage(), e); }
 
         log.progress(id, "Registering animation...");
-        animation.setFrameIds(frameIds);
+        animation.setFrames(frameEntries);
         loader.register(animation);
 
         double elapsed = (System.currentTimeMillis() - startMs) / 1000.0;
-        log.info("Successfully generated '" + id + "' in " + String.format("%.1f", elapsed)
-                + "s (" + frames.size() + " frames, " + targetW + "x" + targetH + ")");
+        log.info("Generated '" + id + "' in " + String.format("%.1f", elapsed)
+                + "s (" + frameEntries.size() + " frames, " + targetW + "x" + targetH + ")");
 
         return animation;
     }
 
-    /**
-     * Computes the final target dimensions.
-     * When keepAspect=true: scales the source so the longer side equals `size`,
-     * then clamps both axes to hardMax.
-     * When keepAspect=false: uses size x size clamped to hardMax.
-     */
-    static int[] computeTargetSize(int srcW, int srcH, int size, int hardMaxW, int hardMaxH, boolean keepAspect) {
-        if (!keepAspect) {
-            return new int[]{Math.min(size, hardMaxW), Math.min(size, hardMaxH)};
-        }
+    // ─── Frame helpers ───────────────────────────────────────────────────────
 
-        // Scale so the longer axis == size, preserve ratio
-        double ratio;
-        if (srcW >= srcH) {
-            ratio = (double) size / srcW;
-        } else {
-            ratio = (double) size / srcH;
-        }
+    static int[] computeTargetSize(int srcW, int srcH, int size, int maxW, int maxH, boolean keepAspect) {
+        if (!keepAspect) return new int[]{Math.min(size, maxW), Math.min(size, maxH)};
+        double ratio = srcW >= srcH ? (double) size / srcW : (double) size / srcH;
         int w = (int) Math.round(srcW * ratio);
         int h = (int) Math.round(srcH * ratio);
-
-        // Clamp to hard limits while still preserving ratio
-        if (w > hardMaxW) { ratio = (double) hardMaxW / w; w = hardMaxW; h = (int) Math.round(h * ratio); }
-        if (h > hardMaxH) { ratio = (double) hardMaxH / h; h = hardMaxH; w = (int) Math.round(w * ratio); }
-
+        if (w > maxW) { ratio = (double) maxW / w; w = maxW; h = (int) Math.round(h * ratio); }
+        if (h > maxH) { ratio = (double) maxH / h; h = maxH; w = (int) Math.round(w * ratio); }
         return new int[]{Math.max(1, w), Math.max(1, h)};
     }
 
-    private BufferedImage scale(BufferedImage src, int srcW, int srcH,
-                                 int targetW, int targetH, boolean keepAspect) {
-        BufferedImage canvas = new BufferedImage(targetW, targetH, BufferedImage.TYPE_INT_ARGB);
+    private BufferedImage scaleFrame(BufferedImage src, int tw, int th, boolean keepAspect) {
+        if (src.getWidth() == tw && src.getHeight() == th) return src;
+        BufferedImage canvas = new BufferedImage(tw, th, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = canvas.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.setRenderingHint(RenderingHints.KEY_RENDERING,     RenderingHints.VALUE_RENDER_QUALITY);
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,  RenderingHints.VALUE_ANTIALIAS_ON);
-
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         if (keepAspect) {
-            // Center the image on the canvas (letterbox if aspect differs slightly due to rounding)
-            double scaleX = (double) targetW / srcW;
-            double scaleY = (double) targetH / srcH;
-            double scale  = Math.min(scaleX, scaleY);
-            int drawW = (int) Math.round(srcW * scale);
-            int drawH = (int) Math.round(srcH * scale);
-            int offX  = (targetW - drawW) / 2;
-            int offY  = (targetH - drawH) / 2;
-            g.drawImage(src, offX, offY, drawW, drawH, null);
+            double sx = (double) tw / src.getWidth(), sy = (double) th / src.getHeight();
+            double s = Math.min(sx, sy);
+            int dw = (int)(src.getWidth() * s), dh = (int)(src.getHeight() * s);
+            g.drawImage(src, (tw - dw) / 2, (th - dh) / 2, dw, dh, null);
         } else {
-            g.drawImage(src, 0, 0, targetW, targetH, null);
+            g.drawImage(src, 0, 0, tw, th, null);
         }
-
         g.dispose();
         return canvas;
     }
 
+    /** Returns 0.0-1.0 pixel similarity between two same-size images. */
+    private double similarity(BufferedImage a, BufferedImage b) {
+        if (a.getWidth() != b.getWidth() || a.getHeight() != b.getHeight()) return 0;
+        int w = a.getWidth(), h = a.getHeight();
+        long total = (long) w * h, same = 0;
+        // Sample every 4th pixel for speed
+        for (int y = 0; y < h; y += 2) {
+            for (int x = 0; x < w; x += 2) {
+                if (a.getRGB(x, y) == b.getRGB(x, y)) same++;
+            }
+        }
+        long sampled = ((long)((h + 1) / 2)) * ((long)((w + 1) / 2));
+        return sampled == 0 ? 1.0 : (double) same / sampled;
+    }
+
+    /** Collect font entries for all currently loaded animations (needed for full pack rebuild). */
+    private Map<String, FontEntry> collectAllFontEntries(String updatedId, Map<String, FontEntry> newEntries) {
+        Map<String, FontEntry> all = new LinkedHashMap<>(newEntries);
+        for (Animation anim : loader.getAll()) {
+            if (anim.getId().equals(updatedId)) continue;
+            for (FrameEntry fe : anim.getFrames()) {
+                allocator.get(fe.id()).ifPresent(c -> {
+                    // Reconstruct FontEntry from stored data (approximate ascent = height)
+                    // We re-derive height from frame file name if available, else use size
+                    int h = anim.getConfig().size();
+                    all.put(fe.id(), new FontEntry("font/" + anim.getId() + "/" +
+                            fe.id().substring(fe.id().lastIndexOf('_') - 4).replace("igif:", "") + ".png",
+                            h, h, c));
+                });
+            }
+        }
+        return all;
+    }
+
     public void deleteDirectory(File dir) {
-        if (!dir.exists()) return;
-        File[] children = dir.listFiles();
-        if (children != null) for (File c : children) {
-            if (c.isDirectory()) deleteDirectory(c);
-            else c.delete();
+        if (dir == null || !dir.exists()) return;
+        File[] ch = dir.listFiles();
+        if (ch != null) for (File f : ch) {
+            if (f.isDirectory()) deleteDirectory(f); else f.delete();
         }
         dir.delete();
     }

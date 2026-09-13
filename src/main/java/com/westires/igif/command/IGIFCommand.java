@@ -8,7 +8,9 @@ import com.westires.igif.animation.DisplayType;
 import com.westires.igif.api.event.IGIFAnimationGeneratedEvent;
 import com.westires.igif.api.event.IGIFAnimationStartEvent;
 import com.westires.igif.api.event.IGIFAnimationStopEvent;
+import com.westires.igif.download.GifDownloader;
 import com.westires.igif.gif.AnimationProcessor;
+import com.westires.igif.gui.AnimationMenuGui;
 import com.westires.igif.integration.ItemsAdderIntegration;
 import com.westires.igif.playback.PlaybackManager;
 import com.westires.igif.util.ConsoleLogger;
@@ -36,17 +38,22 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
     private final AnimationProcessor processor;
     private final PlaybackManager playback;
     private final ItemsAdderIntegration itemsAdder;
+    private final GifDownloader downloader;
+    private final AnimationMenuGui menuGui;
 
     public IGIFCommand(Plugin plugin, ConsoleLogger log, MessageService messages,
                        AnimationLoader loader, AnimationProcessor processor,
-                       PlaybackManager playback, ItemsAdderIntegration itemsAdder) {
-        this.plugin = plugin;
-        this.log = log;
-        this.messages = messages;
-        this.loader = loader;
-        this.processor = processor;
-        this.playback = playback;
+                       PlaybackManager playback, ItemsAdderIntegration itemsAdder,
+                       GifDownloader downloader, AnimationMenuGui menuGui) {
+        this.plugin     = plugin;
+        this.log        = log;
+        this.messages   = messages;
+        this.loader     = loader;
+        this.processor  = processor;
+        this.playback   = playback;
         this.itemsAdder = itemsAdder;
+        this.downloader = downloader;
+        this.menuGui    = menuGui;
     }
 
     @Override
@@ -70,6 +77,8 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
             case "info"       -> cmdInfo(sender, args);
             case "config"     -> cmdConfig(sender, args);
             case "delete"     -> cmdDelete(sender, args);
+            case "menu"       -> cmdMenu(sender);
+            case "download"   -> cmdDownload(sender, args);
             default           -> sendHelp(sender, label);
         }
         return true;
@@ -409,7 +418,7 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of(
                     "create", "generate", "regenerate", "play", "stop", "stopall",
-                    "config", "delete", "reload", "list", "info"));
+                    "config", "delete", "download", "menu", "reload", "list", "info"));
             return filterStartsWith(subs, args[0]);
         }
 
@@ -417,7 +426,7 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 2) {
             return switch (sub) {
-                case "generate", "regenerate", "play", "stop", "info", "config", "delete" ->
+                case "generate", "regenerate", "play", "stop", "info", "config", "delete", "download" ->
                         filterStartsWith(animationIds(), args[1]);
                 case "stopall" ->
                         filterStartsWith(onlinePlayerNames(), args[1]);
@@ -490,12 +499,15 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
                         base.getConfig().maxHeight(),
                         base.getConfig().fullscreen(),
                         base.getConfig().size(),
-                        base.getConfig().keepAspect()
+                        base.getConfig().keepAspect(),
+                        base.getConfig().frameSkip(),
+                        base.getConfig().dedup(),
+                        base.getConfig().dedupThreshold()
                 ),
                 base.getSourceDir(),
                 base.getGeneratedDir()
         );
-        wrapper.setFrameIds(base.getFrameIds());
+        wrapper.setFrames(new java.util.ArrayList<>(base.getFrames()));
         return wrapper;
     }
 
@@ -504,14 +516,42 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§7/" + label + " create §f<name> §8— §7Create an animation directory");
         sender.sendMessage("§7/" + label + " generate §f<name> §8— §7Process and generate animation");
         sender.sendMessage("§7/" + label + " regenerate §f<name> §8— §7Re-process an existing animation");
+        sender.sendMessage("§7/" + label + " download §f<name> <url> §8— §7Download GIF from URL");
         sender.sendMessage("§7/" + label + " play §f<name> <player> [type] §8— §7Play animation for player");
         sender.sendMessage("§7/" + label + " stop §f<name> <player> §8— §7Stop specific animation");
         sender.sendMessage("§7/" + label + " stopall §f<player> §8— §7Stop all animations for player");
+        sender.sendMessage("§7/" + label + " menu §8— §7Open animation manager GUI");
         sender.sendMessage("§7/" + label + " config §f<name> <key> <value> §8— §7Edit animation config live");
         sender.sendMessage("§7/" + label + " delete §f<name> §8— §7Delete animation and IA assets");
         sender.sendMessage("§7/" + label + " list §8— §7List loaded animations");
         sender.sendMessage("§7/" + label + " info §f<name> §8— §7Show animation details");
         sender.sendMessage("§7/" + label + " reload §8— §7Reload configuration");
+    }
+
+    private void cmdMenu(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            messages.send(sender, "player-only");
+            return;
+        }
+        if (!player.hasPermission("igif.menu")) {
+            messages.send(sender, "no-permission");
+            return;
+        }
+        menuGui.open(player);
+    }
+
+    private void cmdDownload(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("igif.download")) {
+            messages.send(sender, "no-permission");
+            return;
+        }
+        if (args.length < 3) {
+            messages.send(sender, "usage", MessageService.of("usage", "/igif download <name> <url>"));
+            return;
+        }
+        String name = sanitize(args[1]);
+        String url  = args[2];
+        downloader.download(sender, name, url, messages);
     }
 
     private void cmdDelete(CommandSender sender, String[] args) {

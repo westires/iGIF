@@ -1,11 +1,11 @@
-// Bellekteki animasyon nesnesi. Frame ID'lerini ve config'i tutar.
+// Bellekteki animasyon nesnesi. FrameEntry listesi ve config tutar.
 package com.westires.igif.animation;
+
+import com.westires.igif.gif.FrameEntry;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public final class Animation {
 
@@ -14,7 +14,7 @@ public final class Animation {
     private final File sourceDir;
     private final File generatedDir;
 
-    private final List<String> frameIds = new ArrayList<>();
+    private final List<FrameEntry> frames = new ArrayList<>();
     private boolean generated = false;
 
     public Animation(String id, AnimationConfig config, File sourceDir, File generatedDir) {
@@ -33,29 +33,31 @@ public final class Animation {
         return new File(sourceDir, config.sourceFile());
     }
 
-    public List<String> getFrameIds() {
-        return Collections.unmodifiableList(frameIds);
+    public List<FrameEntry> getFrames() {
+        return Collections.unmodifiableList(frames);
     }
 
-    public int getFrameCount()  { return frameIds.size(); }
+    // Legacy: IDs only (used by ItemsAdder integration path)
+    public List<String> getFrameIds() {
+        List<String> ids = new ArrayList<>(frames.size());
+        for (FrameEntry e : frames) ids.add(e.id());
+        return ids;
+    }
+
+    public int getFrameCount()   { return frames.size(); }
     public boolean isGenerated() { return generated; }
 
-    public void setFrameIds(List<String> ids) {
-        frameIds.clear();
-        frameIds.addAll(ids);
-        generated = !frameIds.isEmpty();
+    public void setFrames(List<FrameEntry> entries) {
+        frames.clear();
+        frames.addAll(entries);
+        generated = !frames.isEmpty();
     }
 
     public void markUngenerated() {
-        frameIds.clear();
+        frames.clear();
         generated = false;
     }
 
-    /**
-     * Writes a single key to the animation's config.yml on disk,
-     * then reloads the in-memory config so running sessions pick it up
-     * on the next frame without a restart.
-     */
     public void setConfigKey(String key, String value) throws IOException {
         File configFile = new File(sourceDir, "config.yml");
         AnimationConfig.saveKey(configFile, key, value);

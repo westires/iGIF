@@ -65,12 +65,15 @@ public final class iGIFAPIImpl implements iGIFAPI {
                         base.getConfig().maxHeight(),
                         base.getConfig().fullscreen(),
                         base.getConfig().size(),
-                        base.getConfig().keepAspect()
+                        base.getConfig().keepAspect(),
+                        base.getConfig().frameSkip(),
+                        base.getConfig().dedup(),
+                        base.getConfig().dedupThreshold()
                 ),
                 base.getSourceDir(),
                 base.getGeneratedDir()
         );
-        overridden.setFrameIds(base.getFrameIds());
+        overridden.setFrames(new java.util.ArrayList<>(base.getFrames()));
         playback.play(player, overridden);
     }
 

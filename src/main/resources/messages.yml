@@ -1,38 +1,36 @@
-# iGIF Messages
-# MiniMessage format: https://docs.advntr.dev/minimessage/format.html
-
 prefix: "<bold><gradient:#55ff55:#aaffaa>iGIF</gradient></bold> <dark_gray>»</dark_gray> "
 
-# --- Animations ---
-animation-generated: "<green>Animation <white><animation></white> successfully generated <gray>(<frames> frames, <fps> fps)</gray><green>."
-animation-already-exists: "<yellow>Animation <white><animation></white> already exists. Use <white>/igif regenerate <animation></white> to replace it."
-animation-not-found: "<red>Animation <white><animation></white> was not found. Use <white>/igif list</white> to see available animations."
-animation-not-generated: "<red>Animation <white><animation></white> exists but has not been generated yet. Run <white>/igif generate <animation></white> first."
+animation-generated: "<green>Animation <white><animation></white> generated. <gray>(<frames> frames, <fps> fps)</gray>"
+animation-already-exists: "<yellow>Animation <white><animation></white> already exists. Use <white>/igif regenerate <animation></white>."
+animation-not-found: "<red>Animation <white><animation></white> not found. Use <white>/igif list</white>."
+animation-not-generated: "<red>Animation <white><animation></white> exists but not generated. Run <white>/igif generate <animation></white> first."
 animation-playing: "<green>Playing <white><animation></white> for <white><player></white> via <white><type></white>."
 animation-stopped: "<yellow>Stopped animation <white><animation></white> for <white><player></white>."
 animation-stopped-all: "<yellow>Stopped all animations for <white><player></white>."
 animation-created: "<green>Animation folder created for <white><animation></white>. Place your GIF inside and configure <white>config.yml</white>."
+animation-deleted: "<green>Animation <white><animation></white> deleted and assets removed."
 
-# --- Processing ---
-processing-start: "<yellow>Processing animation <white><animation></white><yellow>..."
+processing-start: "<yellow>Processing animation <white><animation></white>..."
 processing-already-running: "<yellow>Animation <white><animation></white> is already being processed."
 
-# --- Errors ---
+download-start: "<yellow>Downloading <white><animation></white> from <gray><url></gray>..."
+download-complete: "<green>Download complete for <white><animation></white>. Processing..."
+download-failed: "<red>Download failed for <white><animation></white>: <gray><error></gray>"
+
+config-updated: "<green>Updated <white><animation></white> — <gray><key></gray> = <white><value></white>."
+
 no-permission: "<red>You don't have permission to do that."
 player-only: "<red>This command can only be run by a player."
-player-not-found: "<red>Player <white><player></white> was not found."
-itemsadder-not-found: "<red>ItemsAdder is required for iGIF to work. Please install ItemsAdder."
+player-not-found: "<red>Player <white><player></white> not found."
+itemsadder-not-found: "<red>ItemsAdder not found. iGIF will use its standalone resource pack."
 invalid-display-type: "<red>Invalid display type <white><type></white>. Use: <white>title</white>, <white>subtitle</white>, or <white>actionbar</white>."
-gif-not-found: "<red>GIF file not found for animation <white><animation></white>. Place <white>animation.gif</white> in its folder."
-invalid-config: "<red>Configuration error for animation <white><animation></white>: <white><error></white>"
+gif-not-found: "<red>GIF file not found for <white><animation></white>. Place <white>animation.gif</white> in its folder."
+invalid-config: "<red>Config error for <white><animation></white>: <white><error></white>"
 
-# --- System ---
-reload-success: "<green>Configuration and animations reloaded successfully."
-no-animations: "<yellow>No animations have been loaded yet."
+reload-success: "<green>Configuration and animations reloaded."
+no-animations: "<yellow>No animations loaded yet."
 list-header: "<green>Loaded animations <gray>(<count>)</gray><green>:"
 list-entry: "  <white>- <animation> <gray>[<frames> frames, <fps> fps, <type>]</gray>"
 info-header: "<green>Animation info: <white><animation>"
 info-line: "  <gray><key>: <white><value>"
-config-updated: "<green>Updated <white><animation></white> — <gray><key></gray> = <white><value></white>."
-animation-deleted: "<green>Animation <white><animation></white> deleted from memory and ItemsAdder assets removed."
 usage: "<red>Usage: <white><usage>"
