@@ -36,6 +36,7 @@ permissions:
       igif.reload: true
       igif.list: true
       igif.info: true
+      igif.config: true
 
   igif.create:
     description: Create animation configs
@@ -63,4 +64,8 @@ permissions:
 
   igif.info:
     description: View animation info
+    default: op
+
+  igif.config:
+    description: Edit animation config values in-game
     default: op

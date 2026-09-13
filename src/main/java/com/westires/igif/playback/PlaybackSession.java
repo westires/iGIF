@@ -2,6 +2,7 @@
 package com.westires.igif.playback;
 
 import com.westires.igif.animation.Animation;
+import com.westires.igif.animation.AnimationConfig;
 import com.westires.igif.animation.DisplayType;
 import com.westires.igif.integration.ItemsAdderIntegration;
 import net.kyori.adventure.text.Component;
@@ -43,7 +44,6 @@ public final class PlaybackSession {
         frameIndex = 0;
 
         int ticksPerFrame = animation.getConfig().ticksPerFrame();
-
         task = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 0L, ticksPerFrame);
     }
 
@@ -58,54 +58,65 @@ public final class PlaybackSession {
 
     private void tick() {
         if (!running) return;
-
-        
-        if (!player.isOnline()) {
-            stop();
-            return;
-        }
+        if (!player.isOnline()) { stop(); return; }
 
         List<String> frameIds = animation.getFrameIds();
-        if (frameIds.isEmpty()) {
-            stop();
-            return;
-        }
+        if (frameIds.isEmpty()) { stop(); return; }
 
-        String frameId = frameIds.get(frameIndex);
+        String frameId  = frameIds.get(frameIndex);
         String character = itemsAdder.getFrameComponent(frameId);
         Component frameComponent = character.isEmpty()
                 ? Component.text("[" + frameId + "]")
                 : mm.deserialize(character);
 
-        DisplayType type = animation.getConfig().displayType();
-        switch (type) {
-            case TITLE -> showTitle(frameComponent, Component.empty());
-            case SUBTITLE -> showTitle(Component.empty(), frameComponent);
-            case ACTIONBAR -> player.sendActionBar(frameComponent);
+        AnimationConfig cfg = animation.getConfig();
+        DisplayType type    = cfg.displayType();
+
+        if (cfg.fullscreen() && type == DisplayType.TITLE) {
+            showFullscreen(frameComponent);
+        } else {
+            switch (type) {
+                case TITLE    -> showTitle(frameComponent, Component.empty());
+                case SUBTITLE -> showTitle(Component.empty(), frameComponent);
+                case ACTIONBAR -> player.sendActionBar(frameComponent);
+            }
         }
 
         frameIndex++;
         if (frameIndex >= frameIds.size()) {
-            if (animation.getConfig().loop()) {
-                frameIndex = 0;
-            } else {
-                stop();
-            }
+            if (cfg.loop()) frameIndex = 0;
+            else stop();
         }
     }
 
-    private void showTitle(Component title, Component subtitle) {
-        var config = animation.getConfig();
+    /**
+     * Fullscreen: fade-in/out 0, stay set so the next frame arrives before this one
+     * disappears. Uses ticksPerFrame * 50ms as stay duration to keep it seamless.
+     */
+    private void showFullscreen(Component frame) {
+        int ticksPerFrame = animation.getConfig().ticksPerFrame();
+        // stay long enough that the next tick always replaces it before it fades
+        int stayMs = (ticksPerFrame + 2) * 50;
         Title.Times times = Title.Times.times(
-                Duration.ofMillis(config.titleFadeIn() * 50L),
-                Duration.ofMillis(config.titleStay() * 50L),
-                Duration.ofMillis(config.titleFadeOut() * 50L)
+                Duration.ZERO,
+                Duration.ofMillis(stayMs),
+                Duration.ZERO
+        );
+        player.showTitle(Title.title(frame, Component.empty(), times));
+    }
+
+    private void showTitle(Component title, Component subtitle) {
+        AnimationConfig cfg = animation.getConfig();
+        Title.Times times = Title.Times.times(
+                Duration.ofMillis(cfg.titleFadeIn()  * 50L),
+                Duration.ofMillis(cfg.titleStay()    * 50L),
+                Duration.ofMillis(cfg.titleFadeOut() * 50L)
         );
         player.showTitle(Title.title(title, subtitle, times));
     }
 
-    public boolean isRunning() { return running; }
-    public Player getPlayer() { return player; }
+    public boolean isRunning()   { return running; }
+    public Player getPlayer()    { return player; }
     public Animation getAnimation() { return animation; }
-    public String getAnimationId() { return animation.getId(); }
+    public String getAnimationId()  { return animation.getId(); }
 }

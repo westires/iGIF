@@ -68,6 +68,7 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
             case "reload"     -> cmdReload(sender);
             case "list"       -> cmdList(sender);
             case "info"       -> cmdInfo(sender, args);
+            case "config"     -> cmdConfig(sender, args);
             default           -> sendHelp(sender, label);
         }
         return true;
@@ -362,6 +363,41 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
         messages.send(sender, "info-line", MessageService.of("key", key, "value", value));
     }
 
+    private void cmdConfig(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("igif.config")) {
+            messages.send(sender, "no-permission");
+            return;
+        }
+        if (args.length < 4) {
+            messages.send(sender, "usage", MessageService.of("usage",
+                    "/igif config <name> <key> <value>  |  keys: fps, loop, type, fullscreen, fade-in, stay, fade-out, width, height"));
+            return;
+        }
+
+        String id = sanitize(args[1]);
+        Optional<Animation> opt = loader.get(id);
+        if (opt.isEmpty()) {
+            messages.send(sender, "animation-not-found", MessageService.of("animation", id));
+            return;
+        }
+
+        String key   = args[2].toLowerCase(Locale.ROOT);
+        String value = args[3];
+
+        try {
+            opt.get().setConfigKey(key, value);
+            messages.send(sender, "config-updated", MessageService.of(
+                    "animation", id, "key", key, "value", value));
+        } catch (IllegalArgumentException e) {
+            messages.send(sender, "invalid-config", MessageService.of(
+                    "animation", id, "error", e.getMessage()));
+        } catch (Exception e) {
+            messages.send(sender, "invalid-config", MessageService.of(
+                    "animation", id, "error", "Could not save config: " + e.getMessage()));
+            log.error("Config save failed for '" + id + "': " + e.getMessage(), e);
+        }
+    }
+
     
 
     @Override
@@ -371,7 +407,8 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
                                                  @NotNull String[] args) {
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of(
-                    "create", "generate", "regenerate", "play", "stop", "stopall", "reload", "list", "info"));
+                    "create", "generate", "regenerate", "play", "stop", "stopall",
+                    "config", "reload", "list", "info"));
             return filterStartsWith(subs, args[0]);
         }
 
@@ -379,7 +416,7 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 2) {
             return switch (sub) {
-                case "generate", "regenerate", "play", "stop", "info" ->
+                case "generate", "regenerate", "play", "stop", "info", "config" ->
                         filterStartsWith(animationIds(), args[1]);
                 case "stopall" ->
                         filterStartsWith(onlinePlayerNames(), args[1]);
@@ -390,12 +427,22 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
         if (args.length == 3) {
             return switch (sub) {
                 case "play", "stop" -> filterStartsWith(onlinePlayerNames(), args[2]);
+                case "config" -> filterStartsWith(List.of(
+                        "fps", "loop", "type", "fullscreen",
+                        "fade-in", "stay", "fade-out", "width", "height"), args[2]);
                 default -> List.of();
             };
         }
 
-        if (args.length == 4 && sub.equals("play")) {
-            return filterStartsWith(List.of("title", "subtitle", "actionbar"), args[3]);
+        if (args.length == 4) {
+            if (sub.equals("play")) return filterStartsWith(List.of("title", "subtitle", "actionbar"), args[3]);
+            if (sub.equals("config")) {
+                return switch (args[2].toLowerCase(Locale.ROOT)) {
+                    case "loop", "fullscreen" -> filterStartsWith(List.of("true", "false"), args[3]);
+                    case "type"               -> filterStartsWith(List.of("title", "subtitle", "actionbar"), args[3]);
+                    default -> List.of();
+                };
+            }
         }
 
         return List.of();
@@ -439,7 +486,8 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
                         base.getConfig().titleStay(),
                         base.getConfig().titleFadeOut(),
                         base.getConfig().maxWidth(),
-                        base.getConfig().maxHeight()
+                        base.getConfig().maxHeight(),
+                        base.getConfig().fullscreen()
                 ),
                 base.getSourceDir(),
                 base.getGeneratedDir()

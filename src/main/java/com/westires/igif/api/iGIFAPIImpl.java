@@ -62,7 +62,8 @@ public final class iGIFAPIImpl implements iGIFAPI {
                         base.getConfig().titleStay(),
                         base.getConfig().titleFadeOut(),
                         base.getConfig().maxWidth(),
-                        base.getConfig().maxHeight()
+                        base.getConfig().maxHeight(),
+                        base.getConfig().fullscreen()
                 ),
                 base.getSourceDir(),
                 base.getGeneratedDir()
