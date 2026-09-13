@@ -34,4 +34,5 @@ list-entry: "  <white>- <animation> <gray>[<frames> frames, <fps> fps, <type>]</
 info-header: "<green>Animation info: <white><animation>"
 info-line: "  <gray><key>: <white><value>"
 config-updated: "<green>Updated <white><animation></white> — <gray><key></gray> = <white><value></white>."
+animation-deleted: "<green>Animation <white><animation></white> deleted from memory and ItemsAdder assets removed."
 usage: "<red>Usage: <white><usage>"

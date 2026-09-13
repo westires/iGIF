@@ -69,6 +69,7 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
             case "list"       -> cmdList(sender);
             case "info"       -> cmdInfo(sender, args);
             case "config"     -> cmdConfig(sender, args);
+            case "delete"     -> cmdDelete(sender, args);
             default           -> sendHelp(sender, label);
         }
         return true;
@@ -408,7 +409,7 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of(
                     "create", "generate", "regenerate", "play", "stop", "stopall",
-                    "config", "reload", "list", "info"));
+                    "config", "delete", "reload", "list", "info"));
             return filterStartsWith(subs, args[0]);
         }
 
@@ -416,7 +417,7 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 2) {
             return switch (sub) {
-                case "generate", "regenerate", "play", "stop", "info", "config" ->
+                case "generate", "regenerate", "play", "stop", "info", "config", "delete" ->
                         filterStartsWith(animationIds(), args[1]);
                 case "stopall" ->
                         filterStartsWith(onlinePlayerNames(), args[1]);
@@ -487,7 +488,9 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
                         base.getConfig().titleFadeOut(),
                         base.getConfig().maxWidth(),
                         base.getConfig().maxHeight(),
-                        base.getConfig().fullscreen()
+                        base.getConfig().fullscreen(),
+                        base.getConfig().size(),
+                        base.getConfig().keepAspect()
                 ),
                 base.getSourceDir(),
                 base.getGeneratedDir()
@@ -504,8 +507,47 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§7/" + label + " play §f<name> <player> [type] §8— §7Play animation for player");
         sender.sendMessage("§7/" + label + " stop §f<name> <player> §8— §7Stop specific animation");
         sender.sendMessage("§7/" + label + " stopall §f<player> §8— §7Stop all animations for player");
+        sender.sendMessage("§7/" + label + " config §f<name> <key> <value> §8— §7Edit animation config live");
+        sender.sendMessage("§7/" + label + " delete §f<name> §8— §7Delete animation and IA assets");
         sender.sendMessage("§7/" + label + " list §8— §7List loaded animations");
         sender.sendMessage("§7/" + label + " info §f<name> §8— §7Show animation details");
         sender.sendMessage("§7/" + label + " reload §8— §7Reload configuration");
+    }
+
+    private void cmdDelete(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("igif.delete")) {
+            messages.send(sender, "no-permission");
+            return;
+        }
+        if (args.length < 2) {
+            messages.send(sender, "usage", MessageService.of("usage", "/igif delete <name>"));
+            return;
+        }
+
+        String id = sanitize(args[1]);
+        Optional<Animation> opt = loader.get(id);
+        if (opt.isEmpty()) {
+            messages.send(sender, "animation-not-found", MessageService.of("animation", id));
+            return;
+        }
+
+        Animation anim = opt.get();
+
+        // Stop any active playback sessions first
+        plugin.getServer().getOnlinePlayers().forEach(p -> playback.stop(p, id));
+
+        // Delete ItemsAdder assets
+        itemsAdder.deleteAssets(id);
+
+        // Delete generated frames
+        processor.deleteDirectory(anim.getGeneratedDir());
+
+        // Unregister from memory
+        loader.unregister(id);
+
+        messages.send(sender, "animation-deleted", MessageService.of("animation", id));
+
+        // Trigger iazip so the pack updates
+        itemsAdder.triggerReload();
     }
 }

@@ -69,3 +69,7 @@ permissions:
   igif.config:
     description: Edit animation config values in-game
     default: op
+
+  igif.delete:
+    description: Delete an animation and its ItemsAdder assets
+    default: op

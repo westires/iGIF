@@ -143,4 +143,37 @@ public final class ItemsAdderIntegration {
     private String namespace() {
         return plugin.getConfig().getString("itemsadder.namespace", "igif");
     }
+
+    /**
+     * Removes the entire animation content pack from ItemsAdder/contents/<ns>/
+     * (configs YAML + texture folder for this animation).
+     */
+    public void deleteAssets(String animId) {
+        if (!available) return;
+        String ns = namespace();
+
+        File yamlFile = new File(namespaceDir, "configs" + File.separator + animId + ".yml");
+        if (yamlFile.exists()) yamlFile.delete();
+
+        File textureDir = new File(namespaceDir,
+                "resourcepack" + File.separator
+                + "assets" + File.separator
+                + ns + File.separator
+                + "textures" + File.separator
+                + "font" + File.separator
+                + animId);
+        deleteDirectory(textureDir);
+
+        log.info("Deleted ItemsAdder assets for animation '" + animId + "'.");
+    }
+
+    private void deleteDirectory(File dir) {
+        if (dir == null || !dir.exists()) return;
+        File[] children = dir.listFiles();
+        if (children != null) for (File c : children) {
+            if (c.isDirectory()) deleteDirectory(c);
+            else c.delete();
+        }
+        dir.delete();
+    }
 }
