@@ -1,4 +1,4 @@
-// Skript'e bağımlı effect sınıfları. Bu dosya sadece Skript varken class loader'a yüklenir.
+// SkriptEffects sınıfı.
 package com.westires.igif.integration;
 
 import ch.njol.skript.Skript;

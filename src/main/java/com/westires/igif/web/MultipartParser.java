@@ -1,4 +1,4 @@
-// Multipart form-data parser. Dış bağımlılık gerektirmez.
+// MultipartParser sınıfı.
 package com.westires.igif.web;
 
 import java.nio.charset.StandardCharsets;
@@ -20,17 +20,17 @@ public final class MultipartParser {
             int end   = positions.get(i + 1);
             if (start >= end) continue;
 
-            // Skip \r\n after boundary
+            
             if (start + 1 < body.length && body[start] == '\r' && body[start + 1] == '\n') start += 2;
 
-            // Find header/body separator (\r\n\r\n)
+            
             byte[] sep = {'\r', '\n', '\r', '\n'};
             int sepPos = indexOf(body, sep, start, end);
             if (sepPos < 0) continue;
 
             String headers = new String(body, start, sepPos - start, StandardCharsets.ISO_8859_1);
             int bodyStart = sepPos + 4;
-            // Trim trailing \r\n before next boundary
+            
             int bodyEnd = end;
             if (bodyEnd >= 2 && body[bodyEnd - 2] == '\r' && body[bodyEnd - 1] == '\n') bodyEnd -= 2;
 

@@ -1,4 +1,4 @@
-// Tarayıcıdan GIF yüklemek, animasyon yönetmek için web admin paneli sunar.
+// AdminWebServer sınıfı.
 package com.westires.igif.web;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -42,12 +42,15 @@ public final class AdminWebServer {
 
         try {
             server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
-            server.createContext("/",            e -> handleIndex(e));
+            server.createContext("/",              e -> handleIndex(e));
             server.createContext("/api/list",    e -> handleList(e));
             server.createContext("/api/upload",  e -> handleUpload(e));
             server.createContext("/api/generate",e -> handleGenerate(e));
             server.createContext("/api/delete",  e -> handleDelete(e));
             server.createContext("/api/status",  e -> handleStatus(e));
+            server.createContext("/api/rename",  e -> handleRename(e));
+            server.createContext("/api/config",  e -> handleConfig(e));
+            server.createContext("/api/ia-reload", e -> handleIaReload(e));
             server.setExecutor(Executors.newFixedThreadPool(2));
             server.start();
             log.info("Web admin panel: http://localhost:" + port + "/");
@@ -60,7 +63,7 @@ public final class AdminWebServer {
         if (server != null) { server.stop(0); server = null; }
     }
 
-    // ─── Handlers ────────────────────────────────────────────────────────────
+    
 
     private void handleIndex(HttpExchange ex) throws IOException {
         if (!ex.getRequestMethod().equals("GET")) { ex.sendResponseHeaders(405, -1); return; }
@@ -139,7 +142,7 @@ public final class AdminWebServer {
         }
         loader.register(anim);
 
-        // Trigger async processing
+        
         processor.process(anim);
 
         respond(ex, 200, "application/json",
@@ -177,11 +180,100 @@ public final class AdminWebServer {
         if (opt.isEmpty()) { respond(ex, 404, "application/json", "{\"error\":\"Not found\"}"); return; }
         Animation a = opt.get();
         respond(ex, 200, "application/json", String.format(
-                "{\"id\":%s,\"generated\":%b,\"frames\":%d,\"processing\":%b}",
-                jsonStr(name), a.isGenerated(), a.getFrameCount(), processor.isProcessing(name)));
+                "{\"id\":%s,\"generated\":%b,\"frames\":%d,\"processing\":%b,\"fps\":%d,\"type\":%s,\"size\":%d}",
+                jsonStr(name), a.isGenerated(), a.getFrameCount(), processor.isProcessing(name),
+                a.getConfig().fps(), jsonStr(a.getConfig().displayType().name()), a.getConfig().size()));
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    private void handleRename(HttpExchange ex) throws IOException {
+        cors(ex);
+        if (ex.getRequestMethod().equals("OPTIONS")) { ex.sendResponseHeaders(204, -1); return; }
+        if (!ex.getRequestMethod().equals("POST")) { ex.sendResponseHeaders(405, -1); return; }
+
+        String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String oldName = null, newName = null;
+        for (String part : body.split("&")) {
+            String[] kv = part.split("=", 2);
+            if (kv.length < 2) continue;
+            String k = URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
+            String v = URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+            if (k.equals("old")) oldName = sanitize(v);
+            if (k.equals("new")) newName = sanitize(v);
+        }
+        if (oldName == null || newName == null || newName.isEmpty()) {
+            respond(ex, 400, "application/json", "{\"error\":\"Missing old or new name\"}"); return;
+        }
+        var opt = loader.get(oldName);
+        if (opt.isEmpty()) { respond(ex, 404, "application/json", "{\"error\":\"Not found\"}"); return; }
+        if (loader.get(newName).isPresent()) {
+            respond(ex, 409, "application/json", "{\"error\":\"Name already taken\"}"); return;
+        }
+
+        File animsDir = loader.getAnimationsDir();
+        File oldDir = new File(animsDir, oldName);
+        File newDir = new File(animsDir, newName);
+        try {
+            Files.move(oldDir.toPath(), newDir.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            respond(ex, 500, "application/json", "{\"error\":\"Could not rename directory\"}"); return;
+        }
+
+        loader.unregister(oldName);
+        var newAnim = loader.loadFromDirectory(newDir);
+        if (newAnim != null) loader.register(newAnim);
+
+        respond(ex, 200, "application/json", "{\"ok\":true,\"id\":" + jsonStr(newName) + "}");
+    }
+
+    private void handleConfig(HttpExchange ex) throws IOException {
+        cors(ex);
+        if (ex.getRequestMethod().equals("OPTIONS")) { ex.sendResponseHeaders(204, -1); return; }
+        if (!ex.getRequestMethod().equals("POST")) { ex.sendResponseHeaders(405, -1); return; }
+
+        String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String animId = null, key = null, value = null;
+        for (String part : body.split("&")) {
+            String[] kv = part.split("=", 2);
+            if (kv.length < 2) continue;
+            String k = URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
+            String v = URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+            if (k.equals("id"))    animId = v;
+            if (k.equals("key"))   key    = v;
+            if (k.equals("value")) value  = v;
+        }
+        if (animId == null || key == null || value == null) {
+            respond(ex, 400, "application/json", "{\"error\":\"Missing id, key or value\"}"); return;
+        }
+        var opt = loader.get(animId);
+        if (opt.isEmpty()) { respond(ex, 404, "application/json", "{\"error\":\"Not found\"}"); return; }
+
+        File configFile = new File(new File(loader.getAnimationsDir(), animId), "config.yml");
+        try {
+            com.westires.igif.animation.AnimationConfig.saveKey(configFile, key, value);
+            loader.reload(animId);
+            respond(ex, 200, "application/json", "{\"ok\":true}");
+        } catch (IllegalArgumentException e) {
+            respond(ex, 400, "application/json", "{\"error\":" + jsonStr(e.getMessage()) + "}");
+        }
+    }
+
+    private void handleIaReload(HttpExchange ex) throws IOException {
+        cors(ex);
+        if (ex.getRequestMethod().equals("OPTIONS")) { ex.sendResponseHeaders(204, -1); return; }
+        if (!ex.getRequestMethod().equals("POST")) { ex.sendResponseHeaders(405, -1); return; }
+
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.getServer().dispatchCommand(
+                plugin.getServer().getConsoleSender(), "iazip");
+            plugin.getServer().getScheduler().runTaskLater(plugin, () ->
+                plugin.getServer().dispatchCommand(
+                    plugin.getServer().getConsoleSender(), "iareload"), 60L);
+        });
+
+        respond(ex, 200, "application/json", "{\"ok\":true}");
+    }
+
+    
 
     private void respond(HttpExchange ex, int code, String mime, String body) throws IOException {
         cors(ex);

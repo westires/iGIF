@@ -1,4 +1,4 @@
-// Bir oyuncu için tek bir animasyon oynatma oturumu. FrameEntry üzerinden değişken süre destekler.
+// Bir oyuncu için tek bir animasyon oynatma oturumu.
 package com.westires.igif.playback;
 
 import com.westires.igif.animation.Animation;
@@ -46,7 +46,7 @@ public final class PlaybackSession {
         running = true;
         frameIndex = 0;
         ticksLeft  = 0;
-        // Run every tick; FrameEntry.ticks controls how many ticks each frame stays
+        
         task = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 0L, 1L);
     }
 
@@ -79,15 +79,26 @@ public final class PlaybackSession {
     private static final Key IGIF_FONT = Key.key("igif", "igif_anim");
 
     private void renderFrame(FrameEntry entry) {
-        // Prefer standalone unicode character; fall back to ItemsAdder wrapper
-        String character = entry.character();
-        if ((character == null || character.isEmpty()) && itemsAdder.isAvailable()) {
-            character = itemsAdder.getFrameComponent(entry.id());
+        boolean standalone = "standalone".equalsIgnoreCase(
+                plugin.getConfig().getString("resourcepack.provider", "itemsadder"));
+        Component frameComp;
+        if (standalone) {
+            String character = entry.character();
+            frameComp = (character != null && !character.isEmpty())
+                    ? Component.text(character).font(IGIF_FONT)
+                    : Component.text("[" + entry.id() + "]");
+        } else {
+            
+            String iaComp = itemsAdder.isAvailable() ? itemsAdder.getFrameComponent(entry.id()) : null;
+            if (iaComp != null && !iaComp.isEmpty()) {
+                frameComp = Component.text(iaComp);
+            } else {
+                String character = entry.character();
+                frameComp = (character != null && !character.isEmpty())
+                        ? Component.text(character).font(IGIF_FONT)
+                        : Component.text("[" + entry.id() + "]");
+            }
         }
-
-        Component frameComp = (character != null && !character.isEmpty())
-                ? Component.text(character).font(IGIF_FONT)
-                : Component.text("[" + entry.id() + "]");
 
         AnimationConfig cfg = animation.getConfig();
         if (cfg.fullscreen() && cfg.displayType() == DisplayType.TITLE) {

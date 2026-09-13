@@ -1,4 +1,4 @@
-// Plugin giriş noktası. v2 — standalone resourcepack, GUI, download desteği.
+// Plugin giriş noktası. Her şey buradan başlar.
 package com.westires.igif;
 
 import com.westires.igif.web.AdminWebServer;
@@ -47,42 +47,42 @@ public final class IGIFPlugin extends JavaPlugin {
 
         messages = new MessageService(this);
 
-        // Standalone resource pack
+        
         unicodeAllocator = new UnicodeAllocator(getDataFolder());
         packManager = new ResourcePackManager(this, log);
         packManager.start();
 
-        // ItemsAdder (optional)
+        
         itemsAdder = new ItemsAdderIntegration(this, log);
         itemsAdder.detect();
 
-        // Core managers
+        
         animationLoader = new AnimationLoader(this, log, getDataFolder());
         processor = new AnimationProcessor(this, log, animationLoader, itemsAdder, packManager, unicodeAllocator);
         playbackManager = new PlaybackManager(this, animationLoader, itemsAdder);
 
         animationLoader.loadAll();
 
-        // API
+        
         api = new iGIFAPIImpl(animationLoader, processor, playbackManager);
         getServer().getServicesManager().register(iGIFAPI.class, api, this, ServicePriority.Normal);
 
-        // Optional Skript
+        
         skript = new SkriptIntegration(api, log);
         skript.injectApi();
         skript.register();
 
-        // Web admin panel
+        
         webServer = new AdminWebServer(this, log, animationLoader, processor);
         webServer.start();
 
-        // Download helper
+        
         downloader = new GifDownloader(this, log, animationLoader, processor);
 
-        // GUI
+        
         menuGui = new AnimationMenuGui(this, animationLoader, processor, playbackManager, log, messages);
 
-        // Commands
+        
         IGIFCommand handler = new IGIFCommand(this, log, messages, animationLoader,
                 processor, playbackManager, itemsAdder, downloader, menuGui);
         var cmd = getCommand("igif");

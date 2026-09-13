@@ -16,6 +16,10 @@ console:
   colored-output: true
 
 resourcepack:
+  # Hangi sistem resource pack sağlasın: itemsadder | standalone
+  # itemsadder: ItemsAdder eklentisi font/texture yönetimini üstlenir (varsayılan)
+  # standalone: iGIF kendi HTTP sunucusuyla pack üretir ve gönderir
+  provider: itemsadder
   serve: true
   port: 8765
   host: ""

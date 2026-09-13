@@ -502,7 +502,9 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
                         base.getConfig().keepAspect(),
                         base.getConfig().frameSkip(),
                         base.getConfig().dedup(),
-                        base.getConfig().dedupThreshold()
+                        base.getConfig().dedupThreshold(),
+                        base.getConfig().fontHeight(),
+                        base.getConfig().fullscreenHeight()
                 ),
                 base.getSourceDir(),
                 base.getGeneratedDir()
@@ -573,21 +575,21 @@ public final class IGIFCommand implements CommandExecutor, TabCompleter {
 
         Animation anim = opt.get();
 
-        // Stop any active playback sessions first
+        
         plugin.getServer().getOnlinePlayers().forEach(p -> playback.stop(p, id));
 
-        // Delete ItemsAdder assets
+        
         itemsAdder.deleteAssets(id);
 
-        // Delete generated frames
+        
         processor.deleteDirectory(anim.getGeneratedDir());
 
-        // Unregister from memory
+        
         loader.unregister(id);
 
         messages.send(sender, "animation-deleted", MessageService.of("animation", id));
 
-        // Trigger iazip so the pack updates
+        
         itemsAdder.triggerReload();
     }
 }

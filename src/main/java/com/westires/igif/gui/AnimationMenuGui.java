@@ -1,4 +1,4 @@
-// /igif menu komutuyla açılan chest GUI. Yüklü animasyonları gösterir, tıkla yönet.
+// AnimationMenuGui sınıfı.
 package com.westires.igif.gui;
 
 import com.westires.igif.animation.Animation;
@@ -37,9 +37,9 @@ public final class AnimationMenuGui implements Listener {
     private final ConsoleLogger log;
     private final MessageService messages;
 
-    // player → their open menu inventory
+    
     private final Map<UUID, Inventory> openMenus = new ConcurrentHashMap<>();
-    // slot → animation id within a player's open inventory
+    
     private final Map<UUID, Map<Integer, String>> slotMaps = new ConcurrentHashMap<>();
 
     public AnimationMenuGui(Plugin plugin, AnimationLoader loader, AnimationProcessor processor,
@@ -68,7 +68,7 @@ public final class AnimationMenuGui implements Listener {
             slotMap.put(i, anim.getId());
         }
 
-        // Bottom row: info / filler
+        
         ItemStack info = named(Material.BOOK, "§a§liGIF Menu",
                 List.of("§7Left-click: §aPlay preview",
                         "§7Right-click: §cStop animation",
@@ -99,19 +99,19 @@ public final class AnimationMenuGui implements Listener {
         boolean right = event.isRightClick();
 
         if (shift && right) {
-            // Delete
+            
             player.closeInventory();
             player.performCommand("igif delete " + animId);
         } else if (shift) {
-            // Regenerate
+            
             player.closeInventory();
             player.performCommand("igif regenerate " + animId);
         } else if (right) {
-            // Stop
+            
             playback.stopAll(player);
             messages.send(player, "animation-stopped-all", MessageService.of("player", player.getName()));
         } else {
-            // Play preview for the opener
+            
             loader.get(animId).ifPresent(anim -> {
                 if (!anim.isGenerated()) {
                     messages.send(player, "animation-not-generated", MessageService.of("animation", animId));
@@ -132,7 +132,7 @@ public final class AnimationMenuGui implements Listener {
         slotMaps.remove(uid);
     }
 
-    // ─── Item builders ───────────────────────────────────────────────────────
+    
 
     private ItemStack buildAnimItem(Animation anim) {
         Material mat = anim.isGenerated() ? Material.FILLED_MAP : Material.MAP;

@@ -1,4 +1,4 @@
-// Her animasyon karesi için benzersiz unicode karakteri tahsis eder.
+// UnicodeAllocator sınıfı.
 package com.westires.igif.resourcepack;
 
 import java.io.*;
@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class UnicodeAllocator {
 
-    // Private Use Area: E000–F8FF (6144 slots)
+    
     private static final int PUA_START = 0xE000;
     private static final int PUA_END   = 0xF8FF;
 
@@ -38,7 +38,7 @@ public final class UnicodeAllocator {
 
     public synchronized void free(String animPrefix) {
         allocated.keySet().removeIf(k -> k.startsWith(animPrefix));
-        // Recompute next from scratch to reclaim gaps
+        
         nextCodepoint = PUA_START;
         for (char c : allocated.values()) {
             if ((int) c >= nextCodepoint) nextCodepoint = (int) c + 1;

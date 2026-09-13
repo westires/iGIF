@@ -1,5 +1,4 @@
-// GIF → PNG kareler → ResourcePack + isteğe bağlı ItemsAdder pipeline.
-// Frame skip ve piksel benzerliği deduplikasyonu destekler.
+// GIF → PNG kareler → ItemsAdder asset pipeline'ını yönetir.
 package com.westires.igif.gif;
 
 import com.westires.igif.animation.Animation;
@@ -47,6 +46,11 @@ public final class AnimationProcessor {
 
     public boolean isProcessing(String id) { return processing.contains(id); }
 
+    public boolean isStandalone() {
+        return "standalone".equalsIgnoreCase(
+                plugin.getConfig().getString("resourcepack.provider", "itemsadder"));
+    }
+
     public CompletableFuture<Animation> process(Animation animation) {
         String id = animation.getId();
         if (processing.contains(id)) return CompletableFuture.failedFuture(
@@ -78,12 +82,12 @@ public final class AnimationProcessor {
 
         if (rawFrames.isEmpty()) throw new RuntimeException("GIF contains no usable frames.");
 
-        // --- Frame skip ---
+        
         int skip = Math.max(1, cfg.frameSkip());
         List<GifFrame> frames = new ArrayList<>();
         for (int i = 0; i < rawFrames.size(); i++) {
             if (i % skip == 0) {
-                // Accumulate delay of skipped frames into the kept frame
+                
                 int accDelay = 0;
                 for (int j = i; j < Math.min(i + skip, rawFrames.size()); j++) {
                     accDelay += rawFrames.get(j).delayMs();
@@ -97,7 +101,7 @@ public final class AnimationProcessor {
             frames = frames.subList(0, maxFrames);
         }
 
-        // --- Target size ---
+        
         int hardMaxW = Math.min(cfg.maxWidth(), globalMaxW);
         int hardMaxH = Math.min(cfg.maxHeight(), globalMaxH);
         int[] target = computeTargetSize(frames.get(0).image().getWidth(),
@@ -109,14 +113,14 @@ public final class AnimationProcessor {
                 + (skip > 1 ? ", skip=" + skip : "")
                 + (cfg.dedup() ? ", dedup on" : ""));
 
-        // --- Scale all frames ---
+        
         List<BufferedImage> scaled = new ArrayList<>(frames.size());
         for (GifFrame f : frames) {
             scaled.add(scaleFrame(f.image(), targetW, targetH, cfg.keepAspect()));
         }
 
-        // --- Deduplication ---
-        // FrameGroup: image + accumulated ticks
+        
+        
         record FrameGroup(BufferedImage img, int totalDelayMs) {}
         List<FrameGroup> groups = new ArrayList<>();
 
@@ -142,12 +146,12 @@ public final class AnimationProcessor {
             }
         }
 
-        // --- Write PNGs to tmp dir ---
+        
         File genDir = animation.getGeneratedDir();
         File tmpDir = new File(genDir.getParentFile(), id + "_tmp_" + System.currentTimeMillis());
         tmpDir.mkdirs();
 
-        // Free old unicode slots
+        
         allocator.free("igif:" + id + "_");
 
         Map<String, FontEntry> fontEntries = new LinkedHashMap<>();
@@ -161,19 +165,22 @@ public final class AnimationProcessor {
             String fileName  = String.format("frame_%04d.png", i + 1);
             char   unicode   = allocator.allocate(frameId);
 
-            // ticks = max(1, delayMs / 50)
+            
             int ticks = Math.max(1, g.totalDelayMs() / 50);
 
             try { ImageIO.write(g.img(), "PNG", new File(tmpDir, fileName)); }
             catch (IOException e) { throw new RuntimeException("Failed to write " + fileName, e); }
 
-            // Stage for standalone resourcepack
-            try { packManager.stageTexture(id, fileName, g.img()); }
-            catch (IOException e) { log.warn("Failed to stage texture " + fileName + ": " + e.getMessage()); }
+            
+            if (isStandalone()) {
+                try { packManager.stageTexture(id, fileName, g.img()); }
+                catch (IOException e) { log.warn("Failed to stage texture " + fileName + ": " + e.getMessage()); }
+            }
 
             String texPath = "font/" + id + "/" + fileName;
-            int ascent = Math.min(targetH, targetH); // ascent <= height
-            fontEntries.put(frameId, new FontEntry(texPath, targetH, ascent, unicode));
+            int renderHeight = cfg.fullscreen() ? cfg.fullscreenHeight() : cfg.fontHeight();
+            int ascent = renderHeight;
+            fontEntries.put(frameId, new FontEntry(texPath, renderHeight, ascent, unicode));
             frameEntries.add(new FrameEntry(frameId, ticks, String.valueOf(unicode)));
 
             if ((i + 1) % 10 == 0 || i + 1 == groups.size()) {
@@ -181,17 +188,19 @@ public final class AnimationProcessor {
             }
         }
 
-        // --- Rebuild standalone resourcepack ---
-        log.progress(id, "Building resource pack...");
-        try {
-            Map<String, FontEntry> allEntries = collectAllFontEntries(id, fontEntries);
-            packManager.rebuild(allEntries);
-        } catch (IOException e) {
-            log.warn("Resource pack rebuild failed: " + e.getMessage());
+        
+        if (isStandalone()) {
+            log.progress(id, "Building resource pack...");
+            try {
+                Map<String, FontEntry> allEntries = collectAllFontEntries(id, fontEntries);
+                packManager.rebuild(allEntries);
+            } catch (IOException e) {
+                log.warn("Resource pack rebuild failed: " + e.getMessage());
+            }
         }
 
-        // --- Optional ItemsAdder integration ---
-        if (itemsAdder.isAvailable()) {
+        
+        if (!isStandalone() && itemsAdder.isAvailable()) {
             log.progress(id, "Generating ItemsAdder assets...");
             try {
                 List<String> frameIds = new ArrayList<>();
@@ -202,7 +211,7 @@ public final class AnimationProcessor {
             }
         }
 
-        // --- Atomic move ---
+        
         if (plugin.getConfig().getBoolean("processing.cleanup-old-frames", true) && genDir.exists()) {
             deleteDirectory(genDir);
         }
@@ -220,7 +229,7 @@ public final class AnimationProcessor {
         return animation;
     }
 
-    // ─── Frame helpers ───────────────────────────────────────────────────────
+    
 
     static int[] computeTargetSize(int srcW, int srcH, int size, int maxW, int maxH, boolean keepAspect) {
         if (!keepAspect) return new int[]{Math.min(size, maxW), Math.min(size, maxH)};
@@ -250,12 +259,12 @@ public final class AnimationProcessor {
         return canvas;
     }
 
-    /** Returns 0.0-1.0 pixel similarity between two same-size images. */
+    
     private double similarity(BufferedImage a, BufferedImage b) {
         if (a.getWidth() != b.getWidth() || a.getHeight() != b.getHeight()) return 0;
         int w = a.getWidth(), h = a.getHeight();
         long total = (long) w * h, same = 0;
-        // Sample every 4th pixel for speed
+        
         for (int y = 0; y < h; y += 2) {
             for (int x = 0; x < w; x += 2) {
                 if (a.getRGB(x, y) == b.getRGB(x, y)) same++;
@@ -265,16 +274,15 @@ public final class AnimationProcessor {
         return sampled == 0 ? 1.0 : (double) same / sampled;
     }
 
-    /** Collect font entries for all currently loaded animations (needed for full pack rebuild). */
+    
     private Map<String, FontEntry> collectAllFontEntries(String updatedId, Map<String, FontEntry> newEntries) {
         Map<String, FontEntry> all = new LinkedHashMap<>(newEntries);
         for (Animation anim : loader.getAll()) {
             if (anim.getId().equals(updatedId)) continue;
             for (FrameEntry fe : anim.getFrames()) {
                 allocator.get(fe.id()).ifPresent(c -> {
-                    // Reconstruct FontEntry from stored data (approximate ascent = height)
-                    // We re-derive height from frame file name if available, else use size
-                    int h = anim.getConfig().size();
+                    AnimationConfig ac = anim.getConfig();
+                    int h = ac.fullscreen() ? ac.fullscreenHeight() : ac.fontHeight();
                     all.put(fe.id(), new FontEntry("font/" + anim.getId() + "/" +
                             fe.id().substring(fe.id().lastIndexOf('_') - 4).replace("igif:", "") + ".png",
                             h, h, c));

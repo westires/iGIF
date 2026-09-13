@@ -20,7 +20,7 @@ public final class ItemsAdderIntegration {
 
     private boolean available = false;
 
-    // plugins/ItemsAdder/contents/igif/
+    
     private File namespaceDir;
 
     public ItemsAdderIntegration(Plugin plugin, ConsoleLogger log) {
@@ -42,27 +42,20 @@ public final class ItemsAdderIntegration {
 
     public boolean isAvailable() { return available; }
 
-    /**
-     * Generates the ItemsAdder content pack for one animation.
-     *
-     * Target structure:
-     *   ItemsAdder/contents/<ns>/
-     *     configs/<animId>.yml
-     *     resourcepack/assets/<ns>/textures/font/<animId>/frame_0001.png ...
-     */
+    
     public void generateAssets(String animId, File framesDir, List<String> frameIds,
                                 int frameWidth, int frameHeight) throws IOException {
         if (!available) throw new IllegalStateException("ItemsAdder is not available.");
 
         String ns = namespace();
 
-        // --- configs dir ---
+        
         File configsDir = new File(namespaceDir, "configs");
         configsDir.mkdirs();
         File yamlFile = new File(configsDir, animId + ".yml");
 
-        // --- textures dir ---
-        // contents/<ns>/resourcepack/assets/<ns>/textures/font/<animId>/
+        
+        
         File textureDir = new File(namespaceDir,
                 "resourcepack" + File.separator
                 + "assets" + File.separator
@@ -72,7 +65,7 @@ public final class ItemsAdderIntegration {
                 + animId);
         textureDir.mkdirs();
 
-        // --- copy PNGs ---
+        
         File[] pngs = framesDir.listFiles(f -> f.getName().endsWith(".png"));
         if (pngs != null) {
             Arrays.sort(pngs);
@@ -83,18 +76,18 @@ public final class ItemsAdderIntegration {
         }
         log.debug("Copied " + (pngs == null ? 0 : pngs.length) + " textures → " + textureDir.getPath());
 
-        // --- YAML ---
-        // font_images path is relative to textures/ inside the namespace
-        // e.g.  path: font/<animId>/frame_0001.png
+        
+        
+        
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("info.namespace", ns);
 
         int scaleRatio = frameHeight;
-        int yPosition  = Math.min(frameHeight, scaleRatio); // must be <= scale_ratio
+        int yPosition  = Math.min(frameHeight, scaleRatio); 
 
         for (int i = 0; i < frameIds.size(); i++) {
-            String fullId = frameIds.get(i);              // e.g. igif:welcome_frame_0001
-            String localId = fullId.substring(fullId.indexOf(':') + 1); // welcome_frame_0001
+            String fullId = frameIds.get(i);              
+            String localId = fullId.substring(fullId.indexOf(':') + 1); 
             String fileName = String.format("frame_%04d.png", i + 1);
 
             String base = "font_images." + localId;
@@ -108,10 +101,7 @@ public final class ItemsAdderIntegration {
         log.debug("Generated YAML → " + yamlFile.getPath());
     }
 
-    /**
-     * Returns the unicode character for a font image so it can be displayed
-     * in title / subtitle / actionbar via Adventure Component.
-     */
+    
     public String getFrameComponent(String frameId) {
         if (!available) return "";
         try {
@@ -144,10 +134,7 @@ public final class ItemsAdderIntegration {
         return plugin.getConfig().getString("itemsadder.namespace", "igif");
     }
 
-    /**
-     * Removes the entire animation content pack from ItemsAdder/contents/<ns>/
-     * (configs YAML + texture folder for this animation).
-     */
+    
     public void deleteAssets(String animId) {
         if (!available) return;
         String ns = namespace();

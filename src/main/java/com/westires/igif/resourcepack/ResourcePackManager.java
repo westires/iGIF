@@ -1,4 +1,4 @@
-// Standalone resource pack üretir ve HTTP üzerinden serve eder. ItemsAdder gerekmez.
+// ResourcePackManager sınıfı.
 package com.westires.igif.resourcepack;
 
 import com.sun.net.httpserver.HttpServer;
@@ -40,7 +40,7 @@ public final class ResourcePackManager implements Listener {
         this.packDir = new File(plugin.getDataFolder(), "pack_staging");
     }
 
-    // ─── public API ──────────────────────────────────────────────────────────
+    
 
     public void start() {
         httpPort = plugin.getConfig().getInt("resourcepack.port", 8765);
@@ -53,10 +53,7 @@ public final class ResourcePackManager implements Listener {
         if (httpServer != null) { httpServer.stop(0); httpServer = null; }
     }
 
-    /**
-     * Adds a single PNG texture into the staging area for the given animation/frame.
-     * Call this for every frame during generation, then call rebuild() when done.
-     */
+    
     public void stageTexture(String animId, String frameFileName, BufferedImage img) throws IOException {
         File dest = new File(packDir,
                 "assets/" + FONT_NS + "/textures/font/" + animId + "/" + frameFileName);
@@ -64,20 +61,13 @@ public final class ResourcePackManager implements Listener {
         ImageIO.write(img, "PNG", dest);
     }
 
-    /**
-     * Removes all staged textures for a given animation.
-     */
+    
     public void unstageAnimation(String animId) {
         File dir = new File(packDir, "assets/" + FONT_NS + "/textures/font/" + animId);
         deleteDirectory(dir);
     }
 
-    /**
-     * Builds pack.mcmeta, the font JSON, zips everything, computes SHA-1.
-     * Must be called after all stageTexture() calls are done.
-     *
-     * @param fontEntries map of font image id → FontEntry(file path, height, ascent)
-     */
+    
     public synchronized void rebuild(Map<String, FontEntry> fontEntries) throws IOException {
         writeMcMeta();
         writeFontJson(fontEntries);
@@ -111,7 +101,7 @@ public final class ResourcePackManager implements Listener {
                 () -> sendToPlayer(event.getPlayer()), 20L);
     }
 
-    // ─── HTTP server ─────────────────────────────────────────────────────────
+    
 
     private void startHttpServer() {
         try {
@@ -130,7 +120,7 @@ public final class ResourcePackManager implements Listener {
         }
     }
 
-    // ─── pack assembly ───────────────────────────────────────────────────────
+    
 
     private void writeMcMeta() throws IOException {
         File meta = new File(packDir, "pack.mcmeta");
@@ -175,7 +165,7 @@ public final class ResourcePackManager implements Listener {
         Files.writeString(new File(fontDir, FONT_NAME + ".json").toPath(), json);
     }
 
-    // ─── zip + SHA-1 helpers ─────────────────────────────────────────────────
+    
 
     private void zipDirectory(File root, File dir, ZipOutputStream zip) throws IOException {
         File[] files = dir.listFiles();

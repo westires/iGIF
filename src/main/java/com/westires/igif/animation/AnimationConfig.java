@@ -22,12 +22,16 @@ public record AnimationConfig(
         boolean keepAspect,
         int frameSkip,
         boolean dedup,
-        double dedupThreshold
+        double dedupThreshold,
+        int fontHeight,
+        int fullscreenHeight
 ) {
 
-    public static final int DEFAULT_FPS        = 10;
-    public static final int DEFAULT_TITLE_STAY = 20;
-    public static final int DEFAULT_SIZE       = 64;
+    public static final int DEFAULT_FPS              = 10;
+    public static final int DEFAULT_TITLE_STAY       = 20;
+    public static final int DEFAULT_SIZE             = 64;
+    public static final int DEFAULT_FONT_HEIGHT      = 16;
+    public static final int DEFAULT_FULLSCREEN_HEIGHT = 200;
 
     public static AnimationConfig load(String animationName, File configFile) {
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
@@ -58,16 +62,23 @@ public record AnimationConfig(
         if (maxWidth  < 1 || maxWidth  > 512) throw new IllegalArgumentException("resolution.width must be 1-512");
         if (maxHeight < 1 || maxHeight > 512) throw new IllegalArgumentException("resolution.height must be 1-512");
 
-        // Frame skip: keep every Nth frame (1 = no skip, 2 = keep 1 in 2, etc.)
+        
         int frameSkip = Math.max(1, yaml.getInt("processing.frame-skip", 1));
 
-        // Deduplication: merge visually identical consecutive frames
+        
         boolean dedup = yaml.getBoolean("processing.dedup", true);
         double dedupThreshold = yaml.getDouble("processing.dedup-threshold", 0.95);
 
+        
+        
+        int fontHeight       = yaml.getInt("display.font-height",       DEFAULT_FONT_HEIGHT);
+        int fullscreenHeight = yaml.getInt("display.fullscreen-height", DEFAULT_FULLSCREEN_HEIGHT);
+        if (fontHeight < 1 || fontHeight > 1000) throw new IllegalArgumentException("display.font-height must be 1-1000");
+        if (fullscreenHeight < 1 || fullscreenHeight > 1000) throw new IllegalArgumentException("display.fullscreen-height must be 1-1000");
+
         return new AnimationConfig(name, source, type, fps, loop,
                 fadeIn, stay, fadeOut, maxWidth, maxHeight, fullscreen, size, keepAspect,
-                frameSkip, dedup, dedupThreshold);
+                frameSkip, dedup, dedupThreshold, fontHeight, fullscreenHeight);
     }
 
     public static void saveKey(File configFile, String key, String value)
@@ -92,11 +103,14 @@ public record AnimationConfig(
             case "fade-in"  -> yaml.set("title.fade-in",    parseInt(key, value, 0, 100));
             case "stay"     -> yaml.set("title.stay",        parseInt(key, value, 1, 200));
             case "fade-out" -> yaml.set("title.fade-out",    parseInt(key, value, 0, 100));
-            case "width"    -> yaml.set("resolution.width",  parseInt(key, value, 1, 512));
-            case "height"   -> yaml.set("resolution.height", parseInt(key, value, 1, 512));
+            case "width"    -> yaml.set("resolution.width",          parseInt(key, value, 1, 512));
+            case "height"   -> yaml.set("resolution.height",         parseInt(key, value, 1, 512));
+            case "font-height"       -> yaml.set("display.font-height",       parseInt(key, value, 1, 1000));
+            case "fullscreen-height" -> yaml.set("display.fullscreen-height", parseInt(key, value, 1, 1000));
             default -> throw new IllegalArgumentException(
                     "Unknown key '" + key + "'. Valid: fps, loop, type, fullscreen, keep-aspect, size, " +
-                    "frame-skip, dedup, dedup-threshold, fade-in, stay, fade-out, width, height");
+                    "frame-skip, dedup, dedup-threshold, fade-in, stay, fade-out, width, height, " +
+                    "font-height, fullscreen-height");
         }
 
         yaml.save(configFile);

@@ -68,7 +68,9 @@ public final class iGIFAPIImpl implements iGIFAPI {
                         base.getConfig().keepAspect(),
                         base.getConfig().frameSkip(),
                         base.getConfig().dedup(),
-                        base.getConfig().dedupThreshold()
+                        base.getConfig().dedupThreshold(),
+                        base.getConfig().fontHeight(),
+                        base.getConfig().fullscreenHeight()
                 ),
                 base.getSourceDir(),
                 base.getGeneratedDir()

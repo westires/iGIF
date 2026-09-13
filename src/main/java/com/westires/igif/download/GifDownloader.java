@@ -1,4 +1,4 @@
-// Async GIF downloader: Imgur, Discord, Tenor ve direkt URL desteği.
+// GifDownloader sınıfı.
 package com.westires.igif.download;
 
 import com.westires.igif.animation.AnimationLoader;
@@ -35,9 +35,7 @@ public final class GifDownloader {
         this.processor = processor;
     }
 
-    /**
-     * Async download + process. Sends progress messages to sender.
-     */
+    
     public void download(CommandSender sender, String name, String rawUrl, MessageService messages) {
         if (downloading.contains(name)) {
             messages.send(sender, "processing-already-running", MessageService.of("animation", name));
@@ -57,7 +55,7 @@ public final class GifDownloader {
                 log.progress(name, "Downloading from: " + resolvedUrl);
                 messages.send(sender, "download-start", MessageService.of("animation", name, "url", resolvedUrl));
 
-                // Create animation directory
+                
                 loader.createAnimationDirectory(name);
                 File animDir = new File(loader.getAnimationsDir(), name);
                 File destGif = new File(animDir, "animation.gif");
@@ -66,7 +64,7 @@ public final class GifDownloader {
                 log.progress(name, "Download complete (" + destGif.length() / 1024 + " KB).");
                 messages.send(sender, "download-complete", MessageService.of("animation", name));
 
-                // Load and auto-process
+                
                 var anim = loader.loadFromDirectory(animDir);
                 if (anim == null) throw new RuntimeException("Failed to load animation config after download.");
                 loader.register(anim);
@@ -97,23 +95,23 @@ public final class GifDownloader {
 
     public boolean isDownloading(String name) { return downloading.contains(name); }
 
-    // ─── URL resolution ──────────────────────────────────────────────────────
+    
 
     private String resolveUrl(String raw) {
-        // Tenor: extract GIF URL from page
+        
         Matcher tenorM = TENOR_ID.matcher(raw);
         if (tenorM.find()) {
-            // Direct Tenor media URL format
+            
             return "https://c.tenor.com/" + tenorM.group(1) + "/tenor.gif";
         }
 
-        // Imgur: convert page URL to direct GIF
+        
         Matcher imgurM = IMGUR_ID.matcher(raw);
         if (imgurM.find() && !raw.contains(".gif") && !raw.contains("i.imgur")) {
             return "https://i.imgur.com/" + imgurM.group(1) + ".gif";
         }
 
-        // Discord CDN / direct link — use as-is
+        
         return raw;
     }
 

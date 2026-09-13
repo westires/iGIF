@@ -1,4 +1,4 @@
-// Bellekteki animasyon nesnesi. FrameEntry listesi ve config tutar.
+// Bellekteki animasyon nesnesi. Frame ID'lerini ve config'i tutar.
 package com.westires.igif.animation;
 
 import com.westires.igif.gif.FrameEntry;
@@ -37,7 +37,7 @@ public final class Animation {
         return Collections.unmodifiableList(frames);
     }
 
-    // Legacy: IDs only (used by ItemsAdder integration path)
+    
     public List<String> getFrameIds() {
         List<String> ids = new ArrayList<>(frames.size());
         for (FrameEntry e : frames) ids.add(e.id());

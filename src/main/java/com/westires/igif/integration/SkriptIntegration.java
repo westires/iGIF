@@ -16,7 +16,7 @@ public final class SkriptIntegration {
     }
 
     public void injectApi() {
-        // no-op — api is passed directly to SkriptEffects.register() below
+        
     }
 
     public void register() {
@@ -25,8 +25,8 @@ public final class SkriptIntegration {
             return;
         }
         try {
-            // Load SkriptEffects only after confirming Skript is on the classpath.
-            // This prevents NoClassDefFoundError when Skript is absent.
+            
+            
             Class<?> effectsClass = Class.forName("com.westires.igif.integration.SkriptEffects");
             effectsClass.getMethod("register", iGIFAPI.class).invoke(null, api);
             enabled = true;

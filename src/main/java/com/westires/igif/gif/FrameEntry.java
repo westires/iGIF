@@ -1,4 +1,4 @@
-// Tek bir animasyon karesi: id, kaç tick gösterilecek, ekranda gösterilecek unicode karakter.
+// FrameEntry sınıfı.
 package com.westires.igif.gif;
 
 public record FrameEntry(

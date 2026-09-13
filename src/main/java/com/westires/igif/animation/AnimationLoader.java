@@ -76,7 +76,7 @@ public final class AnimationLoader {
         if (genDir.exists()) {
             List<String> frameIds = scanGeneratedFrames(id, genDir);
             if (!frameIds.isEmpty()) {
-                // Restore as FrameEntry list with default ticks; unicode chars loaded from allocator at runtime
+                
                 List<com.westires.igif.gif.FrameEntry> entries = frameIds.stream()
                         .map(fid -> new com.westires.igif.gif.FrameEntry(fid,
                                 Math.max(1, 20 / config.fps()), ""))
@@ -135,6 +135,13 @@ public final class AnimationLoader {
 
     public void unregister(String id) {
         loaded.remove(id);
+    }
+
+    public void reload(String id) {
+        File dir = new File(animationsDir, id);
+        if (!dir.exists()) return;
+        Animation anim = loadFromDirectory(dir);
+        if (anim != null) loaded.put(id, anim);
     }
 
     public Optional<Animation> get(String id) {
