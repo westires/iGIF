@@ -8,6 +8,9 @@ import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 import java.util.List;
 
 public final class ItemsAdderIntegration {
@@ -15,28 +18,23 @@ public final class ItemsAdderIntegration {
     private final Plugin plugin;
     private final ConsoleLogger log;
 
-    
-    private final File iaDataDir;
-    
-    private final File igifPackDir;
-
     private boolean available = false;
+
+    // plugins/ItemsAdder/contents/igif/
+    private File namespaceDir;
 
     public ItemsAdderIntegration(Plugin plugin, ConsoleLogger log) {
         this.plugin = plugin;
         this.log = log;
-
-        
-        File iaDir = new File(plugin.getDataFolder().getParentFile(), "ItemsAdder");
-        this.iaDataDir = new File(iaDir, "data" + File.separator + "items_packs");
-        this.igifPackDir = new File(iaDataDir, "igif");
     }
 
     public void detect() {
         available = plugin.getServer().getPluginManager().isPluginEnabled("ItemsAdder");
         if (available) {
-            log.info("ItemsAdder integration: ENABLED");
-            igifPackDir.mkdirs();
+            String ns = namespace();
+            File iaDir = new File(plugin.getDataFolder().getParentFile(), "ItemsAdder");
+            namespaceDir = new File(iaDir, "contents" + File.separator + ns);
+            namespaceDir.mkdirs();
         } else {
             log.warn("ItemsAdder not found! iGIF requires ItemsAdder to display animations.");
         }
@@ -44,71 +42,76 @@ public final class ItemsAdderIntegration {
 
     public boolean isAvailable() { return available; }
 
-    
+    /**
+     * Generates the ItemsAdder content pack for one animation.
+     *
+     * Target structure:
+     *   ItemsAdder/contents/<ns>/
+     *     configs/<animId>.yml
+     *     resourcepack/assets/<ns>/textures/font/<animId>/frame_0001.png ...
+     */
     public void generateAssets(String animId, File framesDir, List<String> frameIds,
                                 int frameWidth, int frameHeight) throws IOException {
-        if (!available) {
-            throw new IllegalStateException("ItemsAdder is not available.");
+        if (!available) throw new IllegalStateException("ItemsAdder is not available.");
+
+        String ns = namespace();
+
+        // --- configs dir ---
+        File configsDir = new File(namespaceDir, "configs");
+        configsDir.mkdirs();
+        File yamlFile = new File(configsDir, animId + ".yml");
+
+        // --- textures dir ---
+        // contents/<ns>/resourcepack/assets/<ns>/textures/font/<animId>/
+        File textureDir = new File(namespaceDir,
+                "resourcepack" + File.separator
+                + "assets" + File.separator
+                + ns + File.separator
+                + "textures" + File.separator
+                + "font" + File.separator
+                + animId);
+        textureDir.mkdirs();
+
+        // --- copy PNGs ---
+        File[] pngs = framesDir.listFiles(f -> f.getName().endsWith(".png"));
+        if (pngs != null) {
+            Arrays.sort(pngs);
+            for (File png : pngs) {
+                Files.copy(png.toPath(), new File(textureDir, png.getName()).toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
         }
+        log.debug("Copied " + (pngs == null ? 0 : pngs.length) + " textures → " + textureDir.getPath());
 
-        igifPackDir.mkdirs();
-
-        String namespace = plugin.getConfig().getString("itemsadder.namespace", "igif");
-
-        
-        File animPackDir = new File(igifPackDir, "animations");
-        animPackDir.mkdirs();
-        File yamlFile = new File(animPackDir, animId + ".yml");
-
+        // --- YAML ---
+        // font_images path is relative to textures/ inside the namespace
+        // e.g.  path: font/<animId>/frame_0001.png
         YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("info.namespace", ns);
+
+        int scaleRatio = frameHeight;
+        int yPosition  = Math.min(frameHeight, scaleRatio); // must be <= scale_ratio
 
         for (int i = 0; i < frameIds.size(); i++) {
-            String frameId = frameIds.get(i);
-            
-            String localId = frameId.substring(frameId.indexOf(':') + 1);
+            String fullId = frameIds.get(i);              // e.g. igif:welcome_frame_0001
+            String localId = fullId.substring(fullId.indexOf(':') + 1); // welcome_frame_0001
             String fileName = String.format("frame_%04d.png", i + 1);
 
-            
-            String texturePath = namespace + "/animations/" + animId + "/" + fileName;
-
             String base = "font_images." + localId;
-            yaml.set(base + ".path", texturePath);
-            yaml.set(base + ".y_position", 0);
-            yaml.set(base + ".width", frameWidth);
-            yaml.set(base + ".height", frameHeight);
-            yaml.set(base + ".scale_ratio", 1);
-            yaml.set(base + ".permission", "");
+            yaml.set(base + ".path", "font/" + animId + "/" + fileName);
+            yaml.set(base + ".scale_ratio", scaleRatio);
+            yaml.set(base + ".y_position", yPosition);
+            yaml.set(base + ".shadow.enabled", false);
         }
 
         yaml.save(yamlFile);
-
-        
-        
-        File textureDir = new File(
-                iaDataDir.getParentFile(),
-                "data" + File.separator + "resource_pack" + File.separator
-                        + "assets" + File.separator + namespace
-                        + File.separator + "textures" + File.separator
-                        + "animations" + File.separator + animId
-        );
-        textureDir.mkdirs();
-
-        File[] frames = framesDir.listFiles(f -> f.getName().endsWith(".png"));
-        if (frames != null) {
-            for (File frame : frames) {
-                File dest = new File(textureDir, frame.getName());
-                java.nio.file.Files.copy(
-                        frame.toPath(), dest.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                );
-            }
-        }
-
-        log.debug("Generated ItemsAdder YAML: " + yamlFile.getPath());
-        log.debug("Copied " + (frames == null ? 0 : frames.length) + " textures to " + textureDir.getPath());
+        log.debug("Generated YAML → " + yamlFile.getPath());
     }
 
-    
+    /**
+     * Returns the unicode character for a font image so it can be displayed
+     * in title / subtitle / actionbar via Adventure Component.
+     */
     public String getFrameComponent(String frameId) {
         if (!available) return "";
         try {
@@ -117,12 +120,11 @@ public final class ItemsAdderIntegration {
                 return wrapper.getString();
             }
         } catch (Exception e) {
-            log.debug("FontImageWrapper failed for '" + frameId + "': " + e.getMessage());
+            log.debug("FontImageWrapper miss for '" + frameId + "': " + e.getMessage());
         }
         return "";
     }
 
-    
     public void triggerReload() {
         if (!available) return;
         if (!plugin.getConfig().getBoolean("itemsadder.auto-reload", true)) return;
@@ -131,11 +133,14 @@ public final class ItemsAdderIntegration {
             try {
                 var console = plugin.getServer().getConsoleSender();
                 plugin.getServer().dispatchCommand(console, "iazip");
-                log.info("ItemsAdder /iazip dispatched — players will receive the updated pack.");
-                log.info("Run /iareload in-game once the zip finishes to reload item data.");
+                log.info("Triggered /iazip — wait for it to finish, then run /iareload.");
             } catch (Exception e) {
-                log.warn("Could not dispatch ItemsAdder reload commands: " + e.getMessage());
+                log.warn("Could not dispatch /iazip: " + e.getMessage());
             }
         });
+    }
+
+    private String namespace() {
+        return plugin.getConfig().getString("itemsadder.namespace", "igif");
     }
 }
